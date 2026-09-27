@@ -333,6 +333,35 @@ export async function getClipHistory(): Promise<HistoryEntry[]> {
 	return (result.history || []) as HistoryEntry[];
 }
 
+// ---------------------------------------------------------------------------
+// Reading settings. Kept out of the synced Settings object above on purpose:
+// the capture URL and token live only in browser.storage.local, so the
+// token never syncs to the user's Google account.
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_READING_CAPTURE_URL = 'https://overjoyed-read-snap-flow.base44.app/functions/capture';
+export const DEFAULT_READING_LANE = 'read-now';
+
+export interface ReadingSettings {
+	captureUrl: string;
+	token: string;
+}
+
+export async function loadReadingSettings(): Promise<ReadingSettings> {
+	const result = await browser.storage.local.get(['readingCaptureUrl', 'readingToken']);
+	return {
+		captureUrl: (result.readingCaptureUrl as string) || DEFAULT_READING_CAPTURE_URL,
+		token: (result.readingToken as string) || '',
+	};
+}
+
+export async function saveReadingSettings(settings: Partial<ReadingSettings>): Promise<void> {
+	const updates: Record<string, string> = {};
+	if (settings.captureUrl !== undefined) updates.readingCaptureUrl = settings.captureUrl;
+	if (settings.token !== undefined) updates.readingToken = settings.token;
+	await browser.storage.local.set(updates);
+}
+
 declare global {
 	interface Window {
 		debugStorage: (key?: string) => Promise<Record<string, unknown>>;

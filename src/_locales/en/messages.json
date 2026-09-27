@@ -872,6 +872,12 @@
 	"readerViewFullSize": {
 		"message": "View full size"
 	},
+	"readingSaveFailed": {
+		"message": "Save failed ($1)."
+	},
+	"readingTokenRejected": {
+		"message": "Token not accepted. Copy it again from Reading, Settings."
+	},
 	"recommended": {
 		"message": "recommended"
 	},
@@ -922,6 +928,9 @@
 	},
 	"saved": {
 		"message": "Saved"
+	},
+	"savedToReading": {
+		"message": "Saved to Reading"
 	},
 	"saveFile": {
 		"message": "Save file..."
@@ -1054,6 +1063,12 @@
 	},
 	"thinking": {
 		"message": "thinking"
+	},
+	"tryAgain": {
+		"message": "Try again"
+	},
+	"unknownError": {
+		"message": "Unknown error"
 	},
 	"unknownProvider": {
 		"message": "Unknown provider"

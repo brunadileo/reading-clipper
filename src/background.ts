@@ -799,6 +799,45 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			}
 		}
 
+		if (typedRequest.action === "sendToReading") {
+			const captureUrl = (typedRequest as any).captureUrl as string | undefined;
+			const token = (typedRequest as any).token as string | undefined;
+			const body = (typedRequest as any).body;
+
+			if (!captureUrl || !token) {
+				sendResponse({ ok: false, status: 401, error: 'Missing capture URL or token' });
+				return true;
+			}
+
+			fetch(captureUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-reader-token': token
+				},
+				body: JSON.stringify(body)
+			}).then(async (response) => {
+				let data: any = undefined;
+				try {
+					data = await response.json();
+				} catch {
+					// Non-JSON or empty body; leave data undefined.
+				}
+				sendResponse({
+					ok: response.ok,
+					status: response.status,
+					data,
+					error: response.ok ? undefined : (data?.error || `Request failed with status ${response.status}`)
+				});
+			}).catch((error) => {
+				sendResponse({
+					ok: false,
+					error: error instanceof Error ? error.message : String(error)
+				});
+			});
+			return true;
+		}
+
 		// For other actions that use sendResponse
 		if (typedRequest.action === "extractContent" ||
 			typedRequest.action === "ensureContentScriptLoaded" ||

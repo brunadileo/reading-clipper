@@ -1,12 +1,13 @@
 import dayjs from 'dayjs';
 import { Template, Property, PromptVariable } from '../types/types';
 import { incrementStat, addHistoryEntry, getClipHistory } from '../utils/storage-utils';
-import { generateFrontmatter, saveToObsidian } from '../utils/obsidian-note-creator';
+import { generateFrontmatter } from '../utils/obsidian-note-creator';
+import { buildReadingCaptureBody, sendToReading } from '../utils/reading-sender';
 import { extractPageContent, initializePageContent } from '../utils/content-extractor';
 import { compileTemplate } from '../utils/template-compiler';
 import { initializeIcons, getPropertyTypeIcon } from '../icons/icons';
 import { findMatchingTemplate, initializeTriggers } from '../utils/triggers';
-import { getLocalStorage, setLocalStorage, loadSettings, generalSettings, Settings } from '../utils/storage-utils';
+import { getLocalStorage, setLocalStorage, loadSettings, generalSettings, Settings, loadReadingSettings, DEFAULT_READING_LANE } from '../utils/storage-utils';
 import { escapeHtml, unescapeValue } from '../utils/string-utils';
 import { loadTemplates, createDefaultTemplate } from '../managers/template-manager';
 import browser from '../utils/browser-polyfill';
@@ -1314,13 +1315,12 @@ function determineMainAction() {
 async function handleClipObsidian(): Promise<void> {
 	if (!currentTemplate) return;
 
-	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement;
+	const laneDropdown = document.getElementById('vault-select') as HTMLSelectElement;
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 	const noteNameField = document.getElementById('note-name-field') as HTMLInputElement;
-	const pathField = document.getElementById('path-name-field') as HTMLInputElement;
 	const interpretBtn = document.getElementById('interpret-btn') as HTMLButtonElement;
 
-	if (!vaultDropdown || !noteContentField) {
+	if (!laneDropdown || !noteContentField) {
 		showError('Some required fields are missing. Please try reloading the extension.');
 		return;
 	}
@@ -1336,33 +1336,88 @@ async function handleClipObsidian(): Promise<void> {
 			}
 		}
 
-		// Gather content
-		const properties = getPropertiesFromDOM();
-
-		const frontmatter = await generateFrontmatter(properties);
-		const fileContent = frontmatter + noteContentField.value;
-
-		// Save to Obsidian
-		const selectedVault = vaultDropdown.value || currentTemplate.vault || '';
-		const isDailyNote = currentTemplate.behavior === 'append-daily' || currentTemplate.behavior === 'prepend-daily';
-		const noteName = isDailyNote ? '' : noteNameField?.value || '';
-		const path = isDailyNote ? '' : pathField?.value || '';
-
-		await saveToObsidian(fileContent, noteName, path, selectedVault, currentTemplate.behavior);
+		const selectedLane = laneDropdown.value || DEFAULT_READING_LANE;
+		const noteName = noteNameField?.value || '';
 		const tabInfo = await getCurrentTabInfo();
-		await incrementStat('addToObsidian', selectedVault, path, tabInfo.url, tabInfo.title);
 
-		lastSelectedVault = selectedVault;
-		await setLocalStorage('lastSelectedVault', lastSelectedVault);
+		const body = buildReadingCaptureBody({
+			url: tabInfo.url,
+			lane: selectedLane,
+			title: noteName,
+			siteName: currentVariables['{{site}}'] || '',
+			text: noteContentField.value
+		});
 
-		if (!isSidePanel) {
-			setTimeout(() => window.close(), 500);
+		const readingSettings = await loadReadingSettings();
+		const result = await sendToReading(body, readingSettings.captureUrl, readingSettings.token);
+
+		if (result.ok) {
+			await incrementStat('addToObsidian', selectedLane, '', tabInfo.url, tabInfo.title);
+
+			lastSelectedVault = selectedLane;
+			await setLocalStorage('lastSelectedVault', lastSelectedVault);
+
+			showReadingSuccess(result.data?.readUrl);
+			if (!isSidePanel) {
+				setTimeout(() => window.close(), 1500);
+			}
+		} else if (result.status === 401) {
+			showReadingRetry(getMessage('readingTokenRejected'));
+		} else {
+			const statusText = result.status ? String(result.status) : (result.error || getMessage('unknownError'));
+			showReadingRetry(getMessage('readingSaveFailed', statusText));
 		}
 	} catch (error) {
 		console.error('Error in handleClipObsidian:', error);
-		showError('failedToSaveFile');
-		throw error;
+		const message = error instanceof Error ? error.message : String(error);
+		showReadingRetry(getMessage('readingSaveFailed', message));
 	}
+}
+
+function showReadingStatusMessage(message: string): void {
+	const statusEl = document.getElementById('reading-status') as HTMLElement | null;
+	const statusMessage = document.getElementById('reading-status-message') as HTMLElement | null;
+	const clipper = document.querySelector('.clipper') as HTMLElement | null;
+	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
+	const tryAgainBtn = document.getElementById('reading-try-again') as HTMLButtonElement | null;
+
+	if (!statusEl || !statusMessage || !clipper) return;
+
+	statusMessage.textContent = message;
+	if (openLink) openLink.style.display = 'none';
+	if (tryAgainBtn) tryAgainBtn.style.display = 'none';
+	statusEl.style.display = 'flex';
+	clipper.style.display = 'none';
+	document.body.classList.add('has-reading-status');
+}
+
+function showReadingSuccess(readUrl?: string): void {
+	showReadingStatusMessage(getMessage('savedToReading'));
+	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
+	if (openLink && readUrl) {
+		openLink.href = readUrl;
+		openLink.style.display = 'inline-block';
+	}
+}
+
+function showReadingRetry(message: string): void {
+	showReadingStatusMessage(message);
+	const tryAgainBtn = document.getElementById('reading-try-again') as HTMLButtonElement | null;
+	if (tryAgainBtn) {
+		tryAgainBtn.style.display = 'inline-block';
+		tryAgainBtn.onclick = () => {
+			hideReadingStatus();
+			handleClipObsidian();
+		};
+	}
+}
+
+function hideReadingStatus(): void {
+	const statusEl = document.getElementById('reading-status') as HTMLElement | null;
+	const clipper = document.querySelector('.clipper') as HTMLElement | null;
+	if (statusEl) statusEl.style.display = 'none';
+	if (clipper) clipper.style.display = '';
+	document.body.classList.remove('has-reading-status');
 }
 
 function addSecondaryAction(container: Element, actionType: string, handler: () => void) {
