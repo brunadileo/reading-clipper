@@ -661,6 +661,10 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 		return;
 	}
 
+	// A new page means a new clip: drop the last save's status so the
+	// side panel shows the editor again.
+	hideReadingStatus();
+
 	try {
 		const tab = await getTabInfo(tabId);
 		if (!tab.url || isBlankPage(tab.url)) {
@@ -772,14 +776,11 @@ function populateTemplateDropdown() {
 function buildTemplateFieldsSkeleton(template: Template | null) {
 	if (!template) return;
 
-	// Handle vault selection
+	// The vault dropdown picks a Reading lane. A template's vault name is not
+	// a lane, so only the remembered lane applies here.
 	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement;
-	if (vaultDropdown) {
-		if (template.vault) {
-			vaultDropdown.value = template.vault;
-		} else if (lastSelectedVault) {
-			vaultDropdown.value = lastSelectedVault;
-		}
+	if (vaultDropdown && lastSelectedVault && READING_LANES.some(lane => lane.value === lastSelectedVault)) {
+		vaultDropdown.value = lastSelectedVault;
 	}
 
 	const existingTemplateProperties = document.querySelector('.metadata-properties') as HTMLElement;
