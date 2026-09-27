@@ -18,7 +18,7 @@
 		"message": "Add provider"
 	},
 	"addToObsidian": {
-		"message": "Add to Obsidian"
+		"message": "Save to Reading"
 	},
 	"addVaultPlaceholder": {
 		"message": "Press enter to add a vault"
@@ -45,7 +45,7 @@
 		"message": "No API key"
 	},
 	"apiKeysWarning": {
-		"message": "By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. Obsidian does not gather or store any data about your requests."
+		"message": "By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. Reading Clipper does not gather or store any data about your requests."
 	},
 	"appendToDaily": {
 		"message": "Add to daily note, at the bottom"
@@ -96,7 +96,7 @@
 		"message": "Clip behavior"
 	},
 	"clipBehaviorDescription": {
-		"message": "Choose how highlighted content is saved to Obsidian. Defines the $strong_start${{content}}$strong_end$ variable.",
+		"message": "Choose how highlighted content is saved to the note. Defines the $strong_start${{content}}$strong_end$ variable.",
 		"placeholders": {
 			"strong_end": {
 				"content": "</strong>"
@@ -118,7 +118,7 @@
 		"message": "Close"
 	},
 	"commandOpenClipper": {
-		"message": "Open Obsidian Clipper"
+		"message": "Open Reading Clipper"
 	},
 	"commandQuickClip": {
 		"message": "Quick clip"
@@ -286,7 +286,7 @@
 		"message": "Save content from the web in a private and durable format that you can access offline. The official browser extension for Obsidian."
 	},
 	"extensionName": {
-		"message": "Obsidian Web Clipper"
+		"message": "Reading Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Failed to copy text"

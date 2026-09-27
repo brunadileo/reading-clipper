@@ -1,10 +1,10 @@
 {
 	"manifest_version": 3,
 	"default_locale": "en",
-	"name": "Obsidian Web Clipper",
-	"homepage_url": "https://obsidian.md/",
+	"name": "Reading Clipper",
+	"homepage_url": "https://reader.lazyailabs.com",
 	"version": "1.7.1",
-	"description": "Save and highlight web pages in a private and durable format that you can access offline. The official extension for Obsidian.",
+	"description": "Save the page you're on into Reading, full article text included. Reads the page in your own logged-in browser, so pages Reading can't fetch on its own still arrive with their text.",
 	"permissions": [
 		"activeTab",
 		"clipboardWrite",
