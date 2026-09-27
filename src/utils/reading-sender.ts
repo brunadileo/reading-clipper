@@ -20,16 +20,6 @@ export interface BuildReadingCaptureBodyParams {
 	text: string;
 }
 
-// A leading YAML frontmatter block, e.g. "---\ntitle: x\n---\n". Obsidian
-// Clipper keeps frontmatter and note body separate already (the caller is
-// expected to pass the body alone), but this strips one defensively so a
-// stray frontmatter block never reaches Reading's stored text.
-const LEADING_FRONTMATTER = /^---\n[\s\S]*?\n---\n?/;
-
-export function stripLeadingFrontmatter(text: string): string {
-	return text.replace(LEADING_FRONTMATTER, '');
-}
-
 /**
  * Build the JSON body Reading's `capture` function expects. Pure function,
  * no browser APIs, so it is unit-testable on its own.
@@ -42,7 +32,9 @@ export function buildReadingCaptureBody(params: BuildReadingCaptureBodyParams): 
 		site_name: params.siteName,
 	};
 
-	const text = stripLeadingFrontmatter(params.text || '').trim();
+	// The caller passes the note body, which never holds frontmatter, so the
+	// text is sent as-is. An article that opens with a "---" rule stays whole.
+	const text = (params.text || '').trim();
 	// Empty text is left out entirely, so Reading falls back to fetching the
 	// page itself instead of storing an empty article.
 	if (text.length > 0) {
