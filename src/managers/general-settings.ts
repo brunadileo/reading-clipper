@@ -2,7 +2,7 @@ import { handleDragStart, handleDragOver, handleDrop, handleDragEnd } from '../u
 import { initializeIcons } from '../icons/icons';
 import { getCommands } from '../utils/hotkeys';
 import { initializeToggles, updateToggleState, initializeSettingToggle } from '../utils/ui-utils';
-import { generalSettings, loadSettings, saveSettings, setLocalStorage, getLocalStorage } from '../utils/storage-utils';
+import { generalSettings, loadSettings, saveSettings, setLocalStorage, getLocalStorage, loadReadingSettings, saveReadingSettings, DEFAULT_READING_CAPTURE_URL } from '../utils/storage-utils';
 import { detectBrowser } from '../utils/browser-detection';
 import { createElementWithClass, createElementWithHTML } from '../utils/dom-utils';
 import { createDefaultTemplate, getTemplates, saveTemplateSettings } from '../managers/template-manager';
@@ -65,6 +65,31 @@ export function updateVaultList(): void {
 	});
 
 	initializeIcons(vaultList);
+}
+
+// Reading's capture URL and token are kept out of the synced Settings object
+// (see storage-utils.ts), so they get their own load/save pair here instead
+// of going through saveSettingsFromForm below.
+async function initializeReadingSettings(): Promise<void> {
+	const captureUrlInput = document.getElementById('reading-capture-url-input') as HTMLInputElement | null;
+	const tokenInput = document.getElementById('reading-token-input') as HTMLInputElement | null;
+	if (!captureUrlInput || !tokenInput) return;
+
+	const readingSettings = await loadReadingSettings();
+	captureUrlInput.value = readingSettings.captureUrl;
+	tokenInput.value = readingSettings.token;
+
+	const saveCaptureUrl = debounce(() => {
+		saveReadingSettings({ captureUrl: captureUrlInput.value.trim() || DEFAULT_READING_CAPTURE_URL });
+	}, 500);
+	const saveToken = debounce(() => {
+		saveReadingSettings({ token: tokenInput.value.trim() });
+	}, 500);
+
+	captureUrlInput.addEventListener('input', saveCaptureUrl);
+	captureUrlInput.addEventListener('change', saveCaptureUrl);
+	tokenInput.addEventListener('input', saveToken);
+	tokenInput.addEventListener('change', saveToken);
 }
 
 export function addVault(vault: string): void {
@@ -212,6 +237,7 @@ export function initializeGeneralSettings(): void {
 		}
 
 		updateVaultList();
+		await initializeReadingSettings();
 		initializeShowMoreActionsToggle();
 		initializeBetaFeaturesToggle();
 		initializeLegacyModeToggle();

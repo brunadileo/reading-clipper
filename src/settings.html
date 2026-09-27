@@ -131,7 +131,29 @@
 									</div>
 								</div>
 							</div>
-							<div class="setting-group">
+							<div class="setting-group" id="reading-settings-group">
+								<div class="setting-item setting-item-heading"><h3 data-i18n="reading">Reading</h3></div>
+								<div class="setting-items">
+								<div class="setting-item-description" data-i18n="readingSettingsDescription">Where clips are sent. The token comes from Reading&#39;s own Settings page.</div>
+								<div class="setting-item mod-horizontal">
+									<div class="setting-item-info">
+										<label for="reading-capture-url-input" data-i18n="readingCaptureUrl">Capture URL</label>
+									</div>
+									<div class="setting-item-control">
+										<input type="text" id="reading-capture-url-input" autocomplete="off" spellcheck="false" />
+									</div>
+								</div>
+								<div class="setting-item mod-horizontal">
+									<div class="setting-item-info">
+										<label for="reading-token-input" data-i18n="readingToken">Token</label>
+									</div>
+									<div class="setting-item-control">
+										<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" />
+									</div>
+								</div>
+								</div>
+							</div>
+							<div class="setting-group" id="vaults-settings-group" style="display: none;">
 								<div class="setting-item setting-item-heading"><h3 data-i18n="vaults">Vaults</h3></div>
 								<div class="setting-items">
 								<div class="setting-item-description" data-i18n="vaultsDescription">By default, clipped notes are saved to the currently open vault. You can add vaults here if you want the option to save to different vaults. Vault names must exactly match the name of the Obsidian vault. Press <strong>enter</strong> to add a&nbsp;vault.</div>
@@ -165,7 +187,7 @@
 											</select>
 										</div>
 									</div>
-									<div class="setting-item mod-horizontal">
+									<div class="setting-item mod-horizontal" style="display: none;">
 										<div class="setting-item-info">
 											<label for="open-behavior-dropdown" data-i18n="openBehaviorTitle">Default open behavior</label>
 											<div class="setting-item-description" data-i18n="openBehaviorDescription">
@@ -180,7 +202,7 @@
 											</select>
 										</div>
 									</div>
-									<div class="setting-item mod-horizontal mod-toggle">
+									<div class="setting-item mod-horizontal mod-toggle" style="display: none;">
 										<div class="setting-item-info">
 											<label for="silent-open-toggle" data-i18n="silentOpen">Save clipped note without opening&nbsp;it</label>
 											<div class="setting-item-description" data-i18n="silentOpenDescription">
@@ -193,7 +215,7 @@
 											</div>
 										</div>
 									</div>
-									<div class="setting-item mod-horizontal mod-toggle">
+									<div class="setting-item mod-horizontal mod-toggle" style="display: none;">
 										<div class="setting-item-info">
 											<label for="legacy-mode-toggle" data-i18n="legacyMode">Legacy&nbsp;mode</label>
 											<div class="setting-item-description" data-i18n="legacyModeDescription">

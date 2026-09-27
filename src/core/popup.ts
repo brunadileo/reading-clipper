@@ -192,12 +192,12 @@ async function initializeExtension(tabId: number) {
 		currentTemplate = templates[0];
 		debugLog('Templates', 'Current template set to:', currentTemplate);
 
-		// Load last selected vault
+		// Load last selected lane (the vault-select dropdown now picks a Reading lane)
 		lastSelectedVault = await getLocalStorage('lastSelectedVault');
-		if (!lastSelectedVault && loadedSettings.vaults.length > 0) {
-			lastSelectedVault = loadedSettings.vaults[0];
+		if (!lastSelectedVault) {
+			lastSelectedVault = DEFAULT_READING_LANE;
 		}
-		debugLog('Vaults', 'Last selected vault:', lastSelectedVault);
+		debugLog('Vaults', 'Last selected lane:', lastSelectedVault);
 
 		const tab = await getTabInfo(tabId);
 		if (!tab.url || isBlankPage(tab.url)) {
@@ -378,7 +378,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 			try {
 				// DOM-dependent initializations
-				updateVaultDropdown(loadedSettings.vaults);
+				updateVaultDropdown();
 				populateTemplateDropdown();
 				setupEventListeners(currentTabId);
 				await initializeUI();
@@ -1048,7 +1048,16 @@ async function getReplacedTemplate(template: Template, variables: { [key: string
 	return replacedTemplate;
 }
 
-function updateVaultDropdown(vaults: string[]) {
+// The dropdown that used to pick an Obsidian vault now picks a Reading lane.
+// Same select element (#vault-select inside #vault-container), fixed options
+// instead of the user's configured vault list.
+const READING_LANES: { value: string; labelKey: string }[] = [
+	{ value: 'read-now', labelKey: 'laneReadNow' },
+	{ value: 'read-later', labelKey: 'laneReadLater' },
+	{ value: 'file-it', labelKey: 'laneFileIt' }
+];
+
+function updateVaultDropdown() {
 	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement | null;
 	const vaultContainer = document.getElementById('vault-container');
 
@@ -1056,24 +1065,20 @@ function updateVaultDropdown(vaults: string[]) {
 
 	// Clear existing options
 	vaultDropdown.textContent = '';
-	
-	vaults.forEach(vault => {
+
+	READING_LANES.forEach(lane => {
 		const option = document.createElement('option');
-		option.value = vault;
-		option.textContent = vault;
+		option.value = lane.value;
+		option.textContent = getMessage(lane.labelKey);
 		vaultDropdown.appendChild(option);
 	});
 
-	// Only show vault selector if vaults are defined
-	if (vaults.length > 0) {
-		vaultContainer.style.display = 'block';
-		if (lastSelectedVault && vaults.includes(lastSelectedVault)) {
-			vaultDropdown.value = lastSelectedVault;
-		} else {
-			vaultDropdown.value = vaults[0];
-		}
+	// Lanes are fixed, unlike Obsidian vaults, so the picker is always shown.
+	vaultContainer.style.display = 'block';
+	if (lastSelectedVault && READING_LANES.some(lane => lane.value === lastSelectedVault)) {
+		vaultDropdown.value = lastSelectedVault;
 	} else {
-		vaultContainer.style.display = 'none';
+		vaultDropdown.value = DEFAULT_READING_LANE;
 	}
 
 	// Add event listener to update lastSelectedVault when changed
