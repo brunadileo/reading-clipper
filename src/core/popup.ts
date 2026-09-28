@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import { Template, Property, PromptVariable } from '../types/types';
 import { incrementStat, addHistoryEntry, getClipHistory } from '../utils/storage-utils';
 import { generateFrontmatter } from '../utils/obsidian-note-creator';
-import { buildReadingCaptureBody, sendToReading } from '../utils/reading-sender';
+import { buildReadingCaptureBody, sendToReading, READING_TEXT_CUT_NOTE } from '../utils/reading-sender';
 import { extractPageContent, initializePageContent } from '../utils/content-extractor';
 import { compileTemplate } from '../utils/template-compiler';
 import { initializeIcons, getPropertyTypeIcon } from '../icons/icons';
@@ -1363,14 +1363,16 @@ async function handleClipObsidian(): Promise<void> {
 			lastSelectedVault = selectedLane;
 			await setLocalStorage('lastSelectedVault', lastSelectedVault);
 
-			showReadingSuccess(result.data?.readUrl);
+			const wasCut = body.text?.endsWith(READING_TEXT_CUT_NOTE) ?? false;
+			showReadingSuccess(result.data?.readUrl, getMessage(wasCut ? 'savedToReadingCut' : 'savedToReading'));
 			if (!isSidePanel) {
 				setTimeout(() => window.close(), 1500);
 			}
 		} else if (result.status === 401) {
 			showReadingRetry(getMessage('readingTokenRejected'));
 		} else {
-			const statusText = result.status ? String(result.status) : (result.error || getMessage('unknownError'));
+			// Reading's own error text when it sent one, so the popup says why.
+			const statusText = result.error || (result.status ? String(result.status) : getMessage('unknownError'));
 			showReadingRetry(getMessage('readingSaveFailed', statusText));
 		}
 	} catch (error) {
@@ -1397,8 +1399,8 @@ function showReadingStatusMessage(message: string): void {
 	document.body.classList.add('has-reading-status');
 }
 
-function showReadingSuccess(readUrl?: string): void {
-	showReadingStatusMessage(getMessage('savedToReading'));
+function showReadingSuccess(readUrl: string | undefined, message: string): void {
+	showReadingStatusMessage(message);
 	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
 	if (openLink && readUrl) {
 		openLink.href = readUrl;

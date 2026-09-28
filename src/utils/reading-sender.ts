@@ -20,6 +20,40 @@ export interface BuildReadingCaptureBodyParams {
 	text: string;
 }
 
+// Reading keeps the text in one Base44 field, and Base44 rejects big values
+// ("Field 'markdown' exceeds the maximum allowed size"). On 2026-09-28 a
+// 20,000-byte text saved and a 70,000-byte one failed. Until Reading stores
+// long text another way (READ-14), longer articles are cut to fit.
+export const MAX_READING_TEXT_BYTES = 20000;
+export const READING_TEXT_CUT_NOTE =
+	'\n\n[Reading Clipper: this article is longer than Reading can store yet, so only the first part was saved.]';
+
+const encoder = new TextEncoder();
+const byteLength = (s: string) => encoder.encode(s).length;
+
+/**
+ * Cut text to fit MAX_READING_TEXT_BYTES (UTF-8), note included. Cuts on
+ * whole characters and, when one is near, at the end of a paragraph.
+ */
+export function fitReadingText(text: string): string {
+	if (byteLength(text) <= MAX_READING_TEXT_BYTES) return text;
+
+	const budget = MAX_READING_TEXT_BYTES - byteLength(READING_TEXT_CUT_NOTE);
+	const chars = Array.from(text);
+	let lo = 0;
+	let hi = chars.length;
+	while (lo < hi) {
+		const mid = Math.ceil((lo + hi) / 2);
+		if (byteLength(chars.slice(0, mid).join('')) <= budget) lo = mid;
+		else hi = mid - 1;
+	}
+
+	let cut = chars.slice(0, lo).join('');
+	const paragraphEnd = cut.lastIndexOf('\n\n');
+	if (paragraphEnd > cut.length * 0.8) cut = cut.slice(0, paragraphEnd);
+	return cut.trimEnd() + READING_TEXT_CUT_NOTE;
+}
+
 /**
  * Build the JSON body Reading's `capture` function expects. Pure function,
  * no browser APIs, so it is unit-testable on its own.
@@ -38,7 +72,7 @@ export function buildReadingCaptureBody(params: BuildReadingCaptureBodyParams): 
 	// Empty text is left out entirely, so Reading falls back to fetching the
 	// page itself instead of storing an empty article.
 	if (text.length > 0) {
-		body.text = text;
+		body.text = fitReadingText(text);
 	}
 
 	return body;

@@ -953,6 +953,9 @@
 	"savedToReading": {
 		"message": "Saved to Reading"
 	},
+	"savedToReadingCut": {
+		"message": "Saved to Reading. The article is long, so only the first part was sent."
+	},
 	"saveFile": {
 		"message": "Save file..."
 	},
