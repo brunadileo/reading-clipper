@@ -49,8 +49,11 @@ export function fitReadingText(text: string): string {
 	}
 
 	let cut = chars.slice(0, lo).join('');
-	const paragraphEnd = cut.lastIndexOf('\n\n');
-	if (paragraphEnd > cut.length * 0.8) cut = cut.slice(0, paragraphEnd);
+	// Paragraph breaks can carry spaces ("  \n  \n" from <br> line ends).
+	const lastBreak = Array.from(cut.matchAll(/\n[ \t]*\n/g)).pop();
+	if (lastBreak?.index !== undefined && lastBreak.index > cut.length * 0.8) {
+		cut = cut.slice(0, lastBreak.index);
+	}
 	return cut.trimEnd() + READING_TEXT_CUT_NOTE;
 }
 

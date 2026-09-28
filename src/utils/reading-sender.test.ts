@@ -90,6 +90,13 @@ describe('fitReadingText', () => {
 		expect(body.length % 1001).toBe(999);
 	});
 
+	it('finds paragraph breaks that carry spaces, as defuddle writes them', () => {
+		const paragraph = 'y'.repeat(997) + '  \n  \n';
+		const fitted = fitReadingText(paragraph.repeat(30));
+		const body = fitted.slice(0, -READING_TEXT_CUT_NOTE.length);
+		expect(body.endsWith('y')).toBe(true);
+	});
+
 	it('buildReadingCaptureBody sends the cut text', () => {
 		const body = buildReadingCaptureBody({
 			url: 'https://example.com/long',
