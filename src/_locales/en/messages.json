@@ -18,7 +18,7 @@
 		"message": "Add provider"
 	},
 	"addToObsidian": {
-		"message": "Save to Reading"
+		"message": "Save to LazyReader"
 	},
 	"addVaultPlaceholder": {
 		"message": "Press enter to add a vault"
@@ -45,7 +45,7 @@
 		"message": "No API key"
 	},
 	"apiKeysWarning": {
-		"message": "By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. Reading Clipper does not gather or store any data about your requests."
+		"message": "By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. LazyReader Clipper does not gather or store any data about your requests."
 	},
 	"appendToDaily": {
 		"message": "Add to daily note, at the bottom"
@@ -118,7 +118,7 @@
 		"message": "Close"
 	},
 	"commandOpenClipper": {
-		"message": "Open Reading Clipper"
+		"message": "Open LazyReader Clipper"
 	},
 	"commandQuickClip": {
 		"message": "Quick clip"
@@ -286,7 +286,7 @@
 		"message": "Save content from the web in a private and durable format that you can access offline. The official browser extension for Obsidian."
 	},
 	"extensionName": {
-		"message": "Reading Clipper"
+		"message": "LazyReader Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Failed to copy text"
@@ -882,7 +882,7 @@
 		"message": "View full size"
 	},
 	"reading": {
-		"message": "Reading"
+		"message": "LazyReader"
 	},
 	"readingCaptureUrl": {
 		"message": "Capture URL"
@@ -891,13 +891,13 @@
 		"message": "Save failed ($1)."
 	},
 	"readingSettingsDescription": {
-		"message": "Where clips are sent. The token comes from Reading's own Settings page."
+		"message": "Where clips are sent. The token comes from LazyReader's own Settings page."
 	},
 	"readingToken": {
 		"message": "Token"
 	},
 	"readingTokenRejected": {
-		"message": "Token not accepted. Copy it again from Reading, Settings."
+		"message": "Token not accepted. Copy it again from LazyReader, Settings."
 	},
 	"recommended": {
 		"message": "recommended"
@@ -951,10 +951,10 @@
 		"message": "Saved"
 	},
 	"savedToReading": {
-		"message": "Saved to Reading"
+		"message": "Saved to LazyReader"
 	},
 	"savedToReadingCut": {
-		"message": "Saved to Reading. The article is long, so only the first part was sent."
+		"message": "Saved to LazyReader. The article is long, so only the first part was sent."
 	},
 	"saveFile": {
 		"message": "Save file..."
