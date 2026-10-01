@@ -26,7 +26,7 @@ export interface BuildReadingCaptureBodyParams {
 // long text another way (READ-14), longer articles are cut to fit.
 export const MAX_READING_TEXT_BYTES = 20000;
 export const READING_TEXT_CUT_NOTE =
-	'\n\n[Reading Clipper: this article is longer than Reading can store yet, so only the first part was saved.]';
+	'\n\n[LazyReader Clipper: this article is longer than LazyReader can store yet, so only the first part was saved.]';
 
 const encoder = new TextEncoder();
 const byteLength = (s: string) => encoder.encode(s).length;
