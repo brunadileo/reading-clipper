@@ -20,13 +20,13 @@ export interface BuildReadingCaptureBodyParams {
 	text: string;
 }
 
-// Reading keeps the text in one Base44 field, and Base44 rejects big values
-// ("Field 'markdown' exceeds the maximum allowed size"). On 2026-09-28 a
-// 20,000-byte text saved and a 70,000-byte one failed. Until Reading stores
-// long text another way (READ-14), longer articles are cut to fit.
-export const MAX_READING_TEXT_BYTES = 20000;
+// The new home (READ-18) stores full text as a file and caps it at 96,000
+// words. 500,000 bytes stays under that for any language and still fits one
+// request; only very long pages are cut. (Base44's 20,000-byte field limit
+// is gone since READ-21 pointed the clipper at lazyreader.app.)
+export const MAX_READING_TEXT_BYTES = 500000;
 export const READING_TEXT_CUT_NOTE =
-	'\n\n[LazyReader Clipper: this article is longer than LazyReader can store yet, so only the first part was saved.]';
+	'\n\n[LazyReader Clipper: this page is very long, so only the first part was saved.]';
 
 const encoder = new TextEncoder();
 const byteLength = (s: string) => encoder.encode(s).length;

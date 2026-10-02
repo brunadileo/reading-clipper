@@ -68,7 +68,7 @@ describe('fitReadingText', () => {
 	});
 
 	it('cuts a long article to the limit and adds the note', () => {
-		const text = 'word '.repeat(14000);
+		const text = 'word '.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 5) + 1000);
 		const fitted = fitReadingText(text);
 		expect(bytes(fitted)).toBeLessThanOrEqual(MAX_READING_TEXT_BYTES);
 		expect(fitted.endsWith(READING_TEXT_CUT_NOTE)).toBe(true);
@@ -76,7 +76,7 @@ describe('fitReadingText', () => {
 	});
 
 	it('counts bytes, so accented and multi-byte text stays under the limit whole-character', () => {
-		const text = 'ação 日本語 '.repeat(4000);
+		const text = 'ação 日本語 '.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 5));
 		const fitted = fitReadingText(text);
 		expect(bytes(fitted)).toBeLessThanOrEqual(MAX_READING_TEXT_BYTES);
 		expect(fitted).not.toContain('�');
@@ -84,7 +84,7 @@ describe('fitReadingText', () => {
 
 	it('cuts at a paragraph end when one is near the limit', () => {
 		const paragraph = 'x'.repeat(999) + '\n\n';
-		const fitted = fitReadingText(paragraph.repeat(30));
+		const fitted = fitReadingText(paragraph.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 1000) + 5));
 		const body = fitted.slice(0, -READING_TEXT_CUT_NOTE.length);
 		expect(body.endsWith('x')).toBe(true);
 		expect(body.length % 1001).toBe(999);
@@ -92,7 +92,7 @@ describe('fitReadingText', () => {
 
 	it('finds paragraph breaks that carry spaces, as defuddle writes them', () => {
 		const paragraph = 'y'.repeat(997) + '  \n  \n';
-		const fitted = fitReadingText(paragraph.repeat(30));
+		const fitted = fitReadingText(paragraph.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 1000) + 5));
 		const body = fitted.slice(0, -READING_TEXT_CUT_NOTE.length);
 		expect(body.endsWith('y')).toBe(true);
 	});
@@ -103,7 +103,7 @@ describe('fitReadingText', () => {
 			lane: 'read-later',
 			title: 'Long',
 			siteName: 'Example',
-			text: 'word '.repeat(14000),
+			text: 'word '.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 5) + 1000),
 		});
 		expect(bytes(body.text!)).toBeLessThanOrEqual(MAX_READING_TEXT_BYTES);
 	});
