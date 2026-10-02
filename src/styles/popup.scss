@@ -396,3 +396,10 @@
 		}
 	}
 }
+
+// LazyReader (READ-32): the clipper only saves to LazyReader. No Obsidian
+// folder field and no secondary "save locally" menu (copy, download, vault).
+#path-name-field,
+.action-buttons .menu-btn {
+	display: none !important;
+}
