@@ -114,7 +114,8 @@ async function getCurrentTabInfo(): Promise<{ url: string; title?: string }> {
 const memoizedExtractPageContent = memoizeWithExpiration(
 	async (tabId: number) => {
 		await getTabInfo(tabId);
-		return extractPageContent(tabId);
+		// LazyReader save: scroll lazy pages to the bottom before extraction.
+		return extractPageContent(tabId, true);
 	},
 	{
 		expirationMs: 5000,

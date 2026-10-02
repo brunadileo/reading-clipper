@@ -12,6 +12,7 @@ import { saveFile } from './utils/file-utils';
 import { debugLog } from './utils/debug';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
+import { scrollToLoad } from './utils/scroll-to-load';
 
 declare global {
 	interface Window {
@@ -200,8 +201,11 @@ declare global {
 
 		if (request.action === "getPageContent") {
 			// Flatten shadow DOM before extraction (async, needs main world)
-			const flattenTimeout = new Promise<void>(resolve => setTimeout(resolve, 3000));
-			Promise.race([flattenShadowDom(document), flattenTimeout]).then(async () => {
+			// LazyReader save only: draw lazy-loaded blocks first (hard 3 s cap).
+			const preScroll: Promise<unknown> = request.scrollToLoad
+				? Promise.race([scrollToLoad(document), new Promise<void>(resolve => setTimeout(resolve, 3000))]).catch(() => undefined)
+				: Promise.resolve();
+			preScroll.then(() => Promise.race([flattenShadowDom(document), new Promise<void>(resolve => setTimeout(resolve, 3000))])).then(async () => {
 				let selectedHtml = '';
 				const selection = window.getSelection();
 

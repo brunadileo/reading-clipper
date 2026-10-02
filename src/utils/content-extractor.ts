@@ -64,11 +64,11 @@ interface ContentResponse {
 	metaTags: { name?: string | null; property?: string | null; content: string | null }[];
 }
 
-async function sendExtractRequest(tabId: number): Promise<ContentResponse> {
+async function sendExtractRequest(tabId: number, scrollToLoad = false): Promise<ContentResponse> {
 	const response = await browser.runtime.sendMessage({
 		action: "sendMessageToTab",
 		tabId: tabId,
-		message: { action: "getPageContent" }
+		message: scrollToLoad ? { action: "getPageContent", scrollToLoad: true } : { action: "getPageContent" }
 	}) as ContentResponse & { success?: boolean; error?: string };
 
 	// Check for explicit error from background script
@@ -101,9 +101,9 @@ async function sendExtractRequest(tabId: number): Promise<ContentResponse> {
 	throw new Error('No content received from page');
 }
 
-export async function extractPageContent(tabId: number): Promise<ContentResponse | null> {
+export async function extractPageContent(tabId: number, scrollToLoad = false): Promise<ContentResponse | null> {
 	try {
-		return await sendExtractRequest(tabId);
+		return await sendExtractRequest(tabId, scrollToLoad);
 	} catch (firstError) {
 		// First attempt failed — this commonly happens on Safari after an
 		// extension update when a zombie content script (runtime invalidated)
@@ -116,7 +116,7 @@ export async function extractPageContent(tabId: number): Promise<ContentResponse
 			// If force-inject fails, proceed anyway — the retry may still work.
 		}
 		try {
-			return await sendExtractRequest(tabId);
+			return await sendExtractRequest(tabId, scrollToLoad);
 		} catch (retryError) {
 			console.error('[Obsidian Clipper] Extraction failed after retry:', retryError);
 			throw new Error('Web Clipper was not able to start. Please try reloading the page.');
