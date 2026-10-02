@@ -202,8 +202,13 @@ declare global {
 		if (request.action === "getPageContent") {
 			// Flatten shadow DOM before extraction (async, needs main world)
 			// LazyReader save only: draw lazy-loaded blocks first (hard 3 s cap).
+			// Scroll is restored only after extraction has finished.
+			let restoreScroll: () => void = () => {};
 			const preScroll: Promise<unknown> = request.scrollToLoad
-				? Promise.race([scrollToLoad(document), new Promise<void>(resolve => setTimeout(resolve, 3000))]).catch(() => undefined)
+				? Promise.race([
+					scrollToLoad(document).then(r => { restoreScroll = r; }),
+					new Promise<void>(resolve => setTimeout(resolve, 3000))
+				]).catch(() => undefined)
 				: Promise.resolve();
 			preScroll.then(() => Promise.race([flattenShadowDom(document), new Promise<void>(resolve => setTimeout(resolve, 3000))])).then(async () => {
 				let selectedHtml = '';
@@ -295,8 +300,10 @@ declare global {
 					highlighter.setPageTitle(defuddled.title);
 				}
 				highlighter.updatePageDomainSettings({ site: defuddled.site, favicon: defuddled.favicon });
+				restoreScroll();
 				sendResponse(response);
 			}).catch((error: unknown) => {
+				restoreScroll();
 				console.error('[Obsidian Clipper] getPageContent error:', error);
 				sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
 			});

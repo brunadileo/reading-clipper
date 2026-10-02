@@ -114,8 +114,7 @@ async function getCurrentTabInfo(): Promise<{ url: string; title?: string }> {
 const memoizedExtractPageContent = memoizeWithExpiration(
 	async (tabId: number) => {
 		await getTabInfo(tabId);
-		// LazyReader save: scroll lazy pages to the bottom before extraction.
-		return extractPageContent(tabId, true);
+		return extractPageContent(tabId);
 	},
 	{
 		expirationMs: 5000,
@@ -1319,6 +1318,32 @@ function determineMainAction() {
 	}
 }
 
+async function refreshContentWithScroll(noteContentField: HTMLTextAreaElement, noteNameField: HTMLInputElement | null): Promise<void> {
+	if (!currentTabId || !currentTemplate) return;
+	const oldContent = noteContentField.value;
+	const oldName = noteNameField?.value;
+	try {
+		const data = await extractPageContent(currentTabId, true);
+		if (!data) return;
+		const tab = await getTabInfo(currentTabId);
+		const initialized = await initializePageContent(
+			data.content, data.selectedHtml, data.extractedContent, tab.url || '',
+			data.schemaOrgData, data.fullHtml, data.highlights || [], data.title,
+			data.author, data.description, data.favicon, data.image, data.published,
+			data.site, data.wordCount, data.language || '', data.metaTags
+		);
+		if (!initialized) return;
+		currentVariables = initialized.currentVariables;
+		await fillTemplateFieldValues(currentTabId, currentTemplate, initialized.currentVariables, data.schemaOrgData);
+		if (noteContentField.value.length < oldContent.length) noteContentField.value = oldContent;
+		if (noteNameField && oldName !== undefined) noteNameField.value = oldName;
+	} catch (error) {
+		console.warn('Scroll-to-load refresh failed, saving the text already loaded:', error);
+		noteContentField.value = oldContent;
+		if (noteNameField && oldName !== undefined) noteNameField.value = oldName;
+	}
+}
+
 async function handleClipObsidian(): Promise<void> {
 	if (!currentTemplate) return;
 
@@ -1342,6 +1367,10 @@ async function handleClipObsidian(): Promise<void> {
 				await waitForInterpreter(interpretBtn);
 			}
 		}
+
+		// LazyReader save only: re-extract once, non-memoized, with scroll-to-load
+		// so lazily drawn blocks are in the text. Keeps the longer content.
+		await refreshContentWithScroll(noteContentField, noteNameField);
 
 		const selectedLane = laneDropdown.value || DEFAULT_READING_LANE;
 		const noteName = noteNameField?.value || '';

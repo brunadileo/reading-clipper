@@ -33,25 +33,27 @@ function findScrollers(doc: Document): HTMLElement[] {
 	return list;
 }
 
-export async function scrollToLoad(doc: Document = document): Promise<void> {
+// Scrolls to the bottom (or until the budget ends) and returns a function that
+// restores the original positions. The caller restores AFTER extraction.
+export async function scrollToLoad(doc: Document = document): Promise<() => void> {
 	const scrollers = findScrollers(doc);
-	if (!scrollers.length) return;
 	const saved = scrollers.map(el => el.scrollTop);
+	const restore = () => { scrollers.forEach((el, i) => { el.scrollTop = saved[i]; }); };
+	if (!scrollers.length) return restore;
 	const start = Date.now();
 	let lastHeights = scrollers.map(el => el.scrollHeight);
 	let stalled = 0;
-	try {
-		while (Date.now() - start < SCROLL_MAX_MS && stalled < SCROLL_STALL_STEPS) {
-			scrollers.forEach(el => {
-				el.scrollTop += Math.max(el.clientHeight * 0.9, 1);
-			});
-			await new Promise<void>(resolve => setTimeout(resolve, SCROLL_STEP_MS));
-			const heights = scrollers.map(el => el.scrollHeight);
-			const grew = heights.some((h, i) => h > lastHeights[i]);
-			stalled = grew ? 0 : stalled + 1;
-			lastHeights = heights;
-		}
-	} finally {
-		scrollers.forEach((el, i) => { el.scrollTop = saved[i]; });
+	while (Date.now() - start < SCROLL_MAX_MS) {
+		scrollers.forEach(el => {
+			el.scrollTop += Math.max(el.clientHeight * 0.9, 1);
+		});
+		await new Promise<void>(resolve => setTimeout(resolve, SCROLL_STEP_MS));
+		const heights = scrollers.map(el => el.scrollHeight);
+		const grew = heights.some((h, i) => h > lastHeights[i]);
+		const atBottom = scrollers.every(el => el.scrollTop + el.clientHeight >= el.scrollHeight - 2);
+		stalled = (grew || !atBottom) ? 0 : stalled + 1;
+		lastHeights = heights;
+		if (stalled >= SCROLL_STALL_STEPS) break;
 	}
+	return restore;
 }
