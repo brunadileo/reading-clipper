@@ -339,7 +339,7 @@ export async function getClipHistory(): Promise<HistoryEntry[]> {
 // token never syncs to the user's Google account.
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_READING_CAPTURE_URL = 'https://reader.lazyailabs.com/functions/capture';
+export const DEFAULT_READING_CAPTURE_URL = 'https://lazyreader.app/api/capture';
 export const DEFAULT_READING_LANE = 'read-now';
 
 export interface ReadingSettings {
