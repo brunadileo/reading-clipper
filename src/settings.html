@@ -151,6 +151,56 @@
 								</div>
 								</div>
 							</div>
+							<div class="setting-group" id="sync-settings-group">
+								<div class="setting-item setting-item-heading"><h3>Sync (experimental)</h3></div>
+								<div class="setting-items">
+								<div class="setting-item-description">Bring posts you saved on other sites into LazyReader. Each sync reads your own saved list in this browser, with your own login. Your login never reaches LazyReader. These sites have no official way to do this, so a sync can stop working without notice. Off by default.</div>
+								<div class="sync-service" data-service="substack">
+									<div class="setting-item mod-horizontal mod-toggle">
+										<div class="setting-item-info">
+											<label for="sync-substack-toggle">Substack <span class="sync-badge">Experimental</span></label>
+											<div class="setting-item-description">Checks your Substack saves every 30 minutes while Chrome is open. The first run takes your newest 100.</div>
+										</div>
+										<div class="setting-item-control">
+											<div class="checkbox-container">
+												<input type="checkbox" id="sync-substack-toggle" />
+											</div>
+										</div>
+									</div>
+									<div class="setting-item mod-horizontal">
+										<div class="setting-item-info">
+											<div class="setting-item-description" id="sync-substack-status" role="status">Off</div>
+										</div>
+										<div class="setting-item-control">
+											<button class="btn" id="sync-substack-now" type="button">Sync now</button>
+											<button class="btn" id="sync-substack-older" type="button">Load older (100)</button>
+										</div>
+									</div>
+								</div>
+								<div class="sync-service" data-service="instagram">
+									<div class="setting-item mod-horizontal mod-toggle">
+										<div class="setting-item-info">
+											<label for="sync-instagram-toggle">Instagram <span class="sync-badge">Experimental</span></label>
+											<div class="setting-item-description">Only runs when you press Sync now, at most once an hour. Instagram can restrict accounts that use automated tools: you use this at your own risk. Needs your SociaVault key saved in LazyReader Settings.</div>
+										</div>
+										<div class="setting-item-control">
+											<div class="checkbox-container">
+												<input type="checkbox" id="sync-instagram-toggle" />
+											</div>
+										</div>
+									</div>
+									<div class="setting-item mod-horizontal">
+										<div class="setting-item-info">
+											<div class="setting-item-description" id="sync-instagram-status" role="status">Off</div>
+										</div>
+										<div class="setting-item-control">
+											<button class="btn" id="sync-instagram-now" type="button">Sync now</button>
+											<button class="btn" id="sync-instagram-older" type="button">Load older (100)</button>
+										</div>
+									</div>
+								</div>
+								</div>
+							</div>
 							<div class="setting-group" id="vaults-settings-group" style="display: none;">
 								<div class="setting-item setting-item-heading"><h3 data-i18n="vaults">Vaults</h3></div>
 								<div class="setting-items">

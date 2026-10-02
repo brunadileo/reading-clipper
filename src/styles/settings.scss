@@ -633,3 +633,17 @@ label {
 	margin: 0;
 	color: var(--text-normal, #222);
 }
+
+.sync-badge {
+	font-size: var(--font-ui-smaller, 0.75em);
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 8px;
+	background: var(--background-modifier-hover, rgba(128, 128, 128, 0.2));
+	color: var(--text-muted);
+	font-weight: normal;
+}
+
+.sync-service .setting-item-control {
+	gap: 8px;
+}

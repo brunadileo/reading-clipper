@@ -10,6 +10,9 @@ export interface ReadingCaptureBody {
 	title: string;
 	site_name: string;
 	text?: string;
+	// READ-37/39: where an automatic save came from. The server keeps only
+	// 'substack' and 'instagram'.
+	source?: 'substack' | 'instagram';
 }
 
 export interface BuildReadingCaptureBodyParams {
@@ -18,6 +21,7 @@ export interface BuildReadingCaptureBodyParams {
 	title: string;
 	siteName: string;
 	text: string;
+	source?: 'substack' | 'instagram';
 }
 
 // The new home (READ-18) stores full text as a file and caps it at 96,000
@@ -69,6 +73,8 @@ export function buildReadingCaptureBody(params: BuildReadingCaptureBodyParams): 
 		site_name: params.siteName,
 	};
 
+	if (params.source) body.source = params.source;
+
 	// The caller passes the note body, which never holds frontmatter, so the
 	// text is sent as-is. An article that opens with a "---" rule stays whole.
 	const text = (params.text || '').trim();
@@ -86,6 +92,40 @@ export interface ReadingSendResult {
 	status?: number;
 	data?: { id?: string; status?: string; created?: string; readUrl?: string; error?: string };
 	error?: string;
+}
+
+/**
+ * The POST itself. Runs in the background worker only (the endpoint sends no
+ * CORS headers). Never logs the token.
+ */
+export async function postCapture(
+	body: ReadingCaptureBody,
+	captureUrl: string,
+	token: string,
+	fetchFn: typeof fetch = fetch
+): Promise<ReadingSendResult> {
+	if (!captureUrl || !token) return { ok: false, status: 401, error: 'Missing capture URL or token' };
+	try {
+		const response = await fetchFn(captureUrl, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-reader-token': token },
+			body: JSON.stringify(body),
+		});
+		let data: ReadingSendResult['data'];
+		try {
+			data = await response.json();
+		} catch {
+			// Non-JSON or empty body; leave data undefined.
+		}
+		return {
+			ok: response.ok,
+			status: response.status,
+			data,
+			error: response.ok ? undefined : data?.error || `Request failed with status ${response.status}`,
+		};
+	} catch (error) {
+		return { ok: false, error: error instanceof Error ? error.message : String(error) };
+	}
 }
 
 /**

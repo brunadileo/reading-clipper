@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildReadingCaptureBody, fitReadingText, MAX_READING_TEXT_BYTES, READING_TEXT_CUT_NOTE } from './reading-sender';
+import { buildReadingCaptureBody, postCapture, fitReadingText, MAX_READING_TEXT_BYTES, READING_TEXT_CUT_NOTE } from './reading-sender';
 
 describe('buildReadingCaptureBody', () => {
 	it('maps title and site name, keeps url and lane as given', () => {
@@ -106,5 +106,25 @@ describe('fitReadingText', () => {
 			text: 'word '.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 5) + 1000),
 		});
 		expect(bytes(body.text!)).toBeLessThanOrEqual(MAX_READING_TEXT_BYTES);
+	});
+});
+
+describe('source and postCapture', () => {
+	it('adds source only when given', () => {
+		const base = { url: 'https://a.test/p/x', lane: 'read-now', title: 'T', siteName: 'S', text: 'body' };
+		expect(buildReadingCaptureBody(base)).not.toHaveProperty('source');
+		expect(buildReadingCaptureBody({ ...base, source: 'substack' }).source).toBe('substack');
+	});
+
+	it('posts with the token header and returns status and data', async () => {
+		let seen: any;
+		const fetchFn = (async (url: string, init: any) => {
+			seen = { url, init };
+			return { ok: true, status: 200, json: async () => ({ id: 'abc', created: true }) } as any;
+		}) as any;
+		const r = await postCapture({ url: 'https://a.test', lane: 'read-now', title: '', site_name: '' }, 'https://cap.test/capture', 'secret-token', fetchFn);
+		expect(r).toMatchObject({ ok: true, status: 200, data: { id: 'abc' } });
+		expect(seen.init.headers['x-reader-token']).toBe('secret-token');
+		expect(await postCapture({ url: 'u', lane: 'l', title: '', site_name: '' }, 'https://cap.test', '')).toMatchObject({ ok: false, status: 401 });
 	});
 });
