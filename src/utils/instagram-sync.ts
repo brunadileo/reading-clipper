@@ -133,7 +133,9 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 			try { json = await res.json(); } catch { return await finish('signed-out', 'Log in to Instagram in this browser'); }
 			const page = parseSavedPosts(json);
 			let stop = false;
+			let used = 0;
 			for (const p of page.posts) {
+				used++;
 				if (known.has(p.id)) {
 					knownRun++;
 					// Later syncs stop after 3 known links in a row (newest first).
@@ -142,10 +144,13 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 				}
 				knownRun = 0;
 				found.push(p);
+				if (found.length >= target) break;
 			}
+			// Stopped inside a page at the limit: keep the cursor on this page, so
+			// Load older fetches it again and the known ids skip what was sent.
+			if (found.length >= target && used < page.posts.length) break;
 			cursor = page.nextMaxId;
 			if (!cursor) { exhausted = true; break; }
-			// A first or older run takes whole pages, so it can end a few posts past 100.
 			if (stop || found.length >= target) break;
 		}
 
