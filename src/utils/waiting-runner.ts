@@ -5,6 +5,7 @@ import { loadReadingSettings } from './storage-utils';
 import { createWaitingApi } from './waiting-api';
 import { isSafeFetchUrl } from './full-text-check';
 import { isOwnPageSender } from './sync-schedule';
+import { ensureOffscreen, offscreenSupported, releaseOffscreen } from './offscreen-doc';
 import {
 	loadFinishState, runFinisher, saveFinishState, MAX_HTML_BYTES,
 	type FinisherDeps, type FinishTrigger,
@@ -19,11 +20,7 @@ const OPEN_WINDOW_KEY = 'finish:openWindowId';
 
 /** Chrome builds only: the Firefox and Safari manifests have no offscreen permission. */
 export function finishSupported(): boolean {
-	try {
-		return !!browser.runtime.getManifest().permissions?.includes('offscreen') && !!c().offscreen;
-	} catch {
-		return false;
-	}
+	return offscreenSupported();
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
@@ -47,40 +44,12 @@ const store = {
 const c = () => chrome as any;
 
 // --- offscreen document (Defuddle needs a DOM) ---------------------------
-// Created on first use in a run, closed when the run ends. Checked every time
-// (not cached), so a document Chrome closed is made again.
-let creating: Promise<void> | null = null;
-async function hasOffscreen(): Promise<boolean> {
-	const existing = await c().runtime.getContexts?.({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
-	return !!existing && existing.length > 0;
-}
-async function ensureOffscreen(): Promise<void> {
-	if (await hasOffscreen()) return;
-	if (!creating) {
-		creating = (async () => {
-			try {
-				await c().offscreen.createDocument({
-					url: 'offscreen.html',
-					reasons: ['DOM_PARSER'],
-					justification: 'Extract article text from fetched HTML for waiting LazyReader items.',
-				});
-			} catch (e) {
-				if (!/single offscreen/i.test(String(e))) throw e;
-			} finally {
-				creating = null;
-			}
-		})();
-	}
-	await creating;
-}
-async function closeOffscreen(): Promise<void> {
-	try {
-		if (await hasOffscreen()) await c().offscreen.closeDocument();
-	} catch { /* already gone */ }
-}
+// Shared with the capture-token lookup (offscreen-doc.ts): taken on first use
+// in a run, let go when the run ends; it closes only when nobody else uses it.
+const OFFSCREEN_HOLDER = 'finish';
 
 async function askOffscreen(message: Record<string, unknown>): Promise<string> {
-	await ensureOffscreen();
+	await ensureOffscreen(OFFSCREEN_HOLDER);
 	const res: any = await withTimeout(c().runtime.sendMessage({ target: 'offscreen', ...message }), EXTRACT_CAP_MS, 'Offscreen extraction');
 	if (!res?.ok) throw new Error(res?.error || 'Offscreen extraction failed');
 	return String(res.text || '');
@@ -187,7 +156,7 @@ export async function runFinish(trigger: FinishTrigger) {
 		try {
 			return await runFinisher(await makeDeps(), trigger);
 		} finally {
-			await closeOffscreen();
+			await releaseOffscreen(OFFSCREEN_HOLDER);
 		}
 	})();
 	try {

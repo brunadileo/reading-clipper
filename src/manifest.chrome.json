@@ -56,7 +56,8 @@
 		{
 			"matches": ["https://lazyreader.app/*"],
 			"js": ["lazyreader-relay.js"],
-			"run_at": "document_start"
+			"run_at": "document_start",
+			"all_frames": true
 		}
 	],
 	"web_accessible_resources": [

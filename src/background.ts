@@ -10,7 +10,7 @@ import { hasStoredHighlights } from './utils/url-utils';
 import { initSyncRunner } from './utils/sync-runner';
 import { initWaitingRunner } from './utils/waiting-runner';
 import { postCapture, type ReadingSendResult } from './utils/reading-sender';
-import { LAZYREADER_ORIGIN, refreshReadingToken } from './utils/reading-token';
+import { acceptFrameSession, LAZYREADER_ORIGIN, refreshReadingToken } from './utils/reading-token';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -839,6 +839,13 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			if (tab?.id === undefined || !tab.url?.startsWith(LAZYREADER_ORIGIN + '/')) return undefined;
 			refreshReadingToken(tab.id).then((t) => sendResponse({ ok: !!t })).catch(() => sendResponse({ ok: false }));
 			return true;
+		}
+
+		// The hidden lazyreader.app frame in the offscreen document reports its
+		// session; taken only while a token lookup is waiting for it.
+		if (typedRequest.action === "lazyreaderFrameSession") {
+			acceptFrameSession(sender, (request as any).accessToken);
+			return undefined;
 		}
 
 		// For other actions that use sendResponse
