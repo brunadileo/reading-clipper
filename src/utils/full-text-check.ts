@@ -9,7 +9,7 @@ export type FullTextCheck = { ok: true } | { ok: false; reason: 'wall' | 'teaser
 
 const WALL_PREFIXES = [
 	'just a moment', 'enable javascript', 'log in to continue', 'sign in to continue',
-	'verify you are human', 'access denied',
+	'verify you are human', 'access denied', 'attention required',
 ];
 const END_WALL = /(subscribe|sign in|join medium|become a member) to (continue reading|read (the full|the rest of this|this) (article|story))/i;
 const PHRASES = [
@@ -25,10 +25,12 @@ export function checkFullText(text: string): FullTextCheck {
 	if (!t) return { ok: false, reason: 'empty' };
 	if (t.endsWith(PREVIEW_NOTE.trim())) return { ok: false, reason: 'teaser' };
 	const words = countWords(t);
-	const head = t.slice(0, 600).toLowerCase();
-	const tail = t.slice(-500).toLowerCase();
-	if (words < 400 && WALL_PREFIXES.some((p) => head.startsWith(p))) return { ok: false, reason: 'wall' };
-	if (END_WALL.test(t.slice(-500))) return { ok: false, reason: 'wall' };
+	const low = t.replace(/[\u2018\u2019]/g, "'").toLowerCase();
+	const head = low.slice(0, 600);
+	const tail = low.slice(-500);
+	const lead = head.slice(0, 200).replace(/^[#\s]+/, '');
+	if (words < 400 && WALL_PREFIXES.some((p) => lead.startsWith(p))) return { ok: false, reason: 'wall' };
+	if (END_WALL.test(tail)) return { ok: false, reason: 'wall' };
 	if (PHRASES.some((p) => head.includes(p) || tail.includes(p))) return { ok: false, reason: 'wall' };
 	return { ok: true };
 }

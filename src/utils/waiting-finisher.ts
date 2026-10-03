@@ -120,17 +120,19 @@ function guard(r: { ok: boolean; status?: number; error?: string }): void {
 /** Text for one item: worker fetch first, minimized window only when that fails the check. */
 async function gatherText(deps: FinisherDeps, url: string): Promise<string> {
 	let fetched = '';
-	let gone = false;
+	let stop = false;
 	try {
 		const page = await deps.fetchPage(url);
-		if (page.status === 404 || page.status === 410) gone = true;
-		else if (page.status >= 200 && page.status < 300 && isSafeFetchUrl(page.finalUrl || url) && page.html && page.html.length <= MAX_HTML_BYTES) {
+		// Gone, or redirected to a link we must not read: no window either,
+		// since the window would follow the same redirect.
+		if (page.status === 404 || page.status === 410 || !isSafeFetchUrl(page.finalUrl || url)) stop = true;
+		else if (page.status >= 200 && page.status < 300 && page.html && page.html.length <= MAX_HTML_BYTES) {
 			fetched = (await deps.extractHtml(page.html, page.finalUrl || url)).trim();
 		}
 	} catch {
 		fetched = '';
 	}
-	if (gone) return '';
+	if (stop) return '';
 	if (checkFullText(fetched).ok || !deps.openForExtraction) return fetched;
 	let opened: string | null = null;
 	try {
@@ -178,6 +180,8 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 		for (const item of listed.items.slice(0, limit)) {
 			if (!first) await deps.sleep(jitter(deps, 2000, 4000));
 			first = false;
+			// Heartbeat: a long run keeps its lock fresh (stale after 15 min).
+			state.lastAttemptAt = deps.now();
 
 			// A link we must not open is given up on without a fetch.
 			if (!isSafeFetchUrl(item.url) || (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) {

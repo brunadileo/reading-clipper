@@ -33,6 +33,11 @@ export function initializeFinishSettings(): void {
 	const now = document.getElementById('finish-now') as HTMLButtonElement | null;
 	const status = document.getElementById('finish-status');
 	if (!toggle || !now) return;
+	// Chrome only (offscreen document); the Firefox and Safari builds hide it.
+	if (!browser.runtime.getManifest().permissions?.includes('offscreen')) {
+		(toggle.closest('[data-service="finish"]') as HTMLElement | null)?.style.setProperty('display', 'none');
+		return;
+	}
 	toggle.addEventListener('change', async () => {
 		await browser.runtime.sendMessage({ action: 'finishSetEnabled', enabled: toggle.checked });
 		await refresh();

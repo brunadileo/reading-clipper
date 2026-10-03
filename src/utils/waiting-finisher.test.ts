@@ -213,13 +213,19 @@ describe('runFinisher', () => {
 		expect(provided.every((p) => p.outcome === 'unreadable')).toBe(true);
 		expect(r.unreadable).toBe(4);
 	});
-	it('ignores a redirect to a private address', async () => {
-		const { deps, provided } = setup({
-			items: [item(1)], noFallback: true,
+	it('ignores a redirect to a private address and opens no window for it', async () => {
+		const { deps, provided, opened } = setup({
+			items: [item(1)],
 			pages: () => ({ status: 200, html: full(), finalUrl: 'https://10.0.0.1/x' }),
+			fallback: () => full(),
 		});
 		await runFinisher(deps, 'now');
 		expect(provided).toEqual([]);
+		expect(opened).toEqual([]);
+	});
+	it('the clipper check normalises curly quotes and markdown headings', () => {
+		expect(checkFullText('# Attention Required! | Cloudflare').ok).toBe(false);
+		expect(checkFullText(`${full(600)} Subscribe to read the full story`).ok).toBe(false);
 	});
 
 	it('stops on LazyReader 401, 429 and 5xx, but not on a 4xx from the article site', async () => {
