@@ -953,6 +953,9 @@
 	"savedToReading": {
 		"message": "Saved to LazyReader"
 	},
+	"savingToReading": {
+		"message": "Saving to LazyReader…"
+	},
 	"savedToReadingCut": {
 		"message": "Saved to LazyReader. The article is long, so only the first part was sent."
 	},

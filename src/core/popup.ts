@@ -1344,8 +1344,10 @@ async function refreshContentWithScroll(noteContentField: HTMLTextAreaElement, n
 	}
 }
 
+let readingSaveInFlight = false;
+
 async function handleClipObsidian(): Promise<void> {
-	if (!currentTemplate) return;
+	if (!currentTemplate || readingSaveInFlight) return;
 
 	const laneDropdown = document.getElementById('vault-select') as HTMLSelectElement;
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
@@ -1356,6 +1358,10 @@ async function handleClipObsidian(): Promise<void> {
 		showError('Some required fields are missing. Please try reloading the extension.');
 		return;
 	}
+
+	// Show "Saving…" at once and hide the form, so the button cannot be clicked twice.
+	readingSaveInFlight = true;
+	showReadingStatusMessage(getMessage('savingToReading'));
 
 	try {
 		// Handle interpreter if needed
@@ -1411,6 +1417,8 @@ async function handleClipObsidian(): Promise<void> {
 		console.error('Error in handleClipObsidian:', error);
 		const message = error instanceof Error ? error.message : String(error);
 		showReadingRetry(getMessage('readingSaveFailed', message));
+	} finally {
+		readingSaveInFlight = false;
 	}
 }
 
