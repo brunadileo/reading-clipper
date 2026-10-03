@@ -36,7 +36,7 @@ vi.mock('./storage-utils', () => ({
 	},
 }));
 
-const { refreshReadingToken } = await import('./reading-token');
+import { refreshReadingToken } from './reading-token';
 
 function profileFetch(token: string | null, status = 200) {
 	return vi.fn(async (_url: string, init: RequestInit) => {
