@@ -9,9 +9,6 @@ import {
 	type FinisherDeps, type FinishTrigger,
 } from './waiting-finisher';
 
-export const FINISH_ALARM = 'finish-waiting';
-export const FINISH_PERIOD_MINUTES = 30;
-export const IDLE_INTERVAL_SECONDS = 15 * 60;
 const TAB_LOAD_CAP_MS = 15_000;
 // Hard cap on reading the opened page; the window is closed either way.
 const EXTRACT_CAP_MS = 20_000;
@@ -200,7 +197,7 @@ export async function runFinish(trigger: FinishTrigger) {
 }
 
 // Only the clipper's own pages and its lazyreader.app relay may ask for a run.
-function trustedSender(sender: any): boolean {
+export function trustedSender(sender: any): boolean {
 	if (!sender || sender.id !== browser.runtime.id) return false;
 	if (!sender.tab) return true;
 	try {
@@ -210,45 +207,21 @@ function trustedSender(sender: any): boolean {
 	}
 }
 
+// The triggers (alarm, startup, idle, Finish now) moved to sync-runner.ts with
+// choice 26: one schedule for the whole clipper. Only the on/off switch stays here.
 export function initWaitingRunner(): void {
 	if (!finishSupported()) return;
-	const api = c();
 	void closeLeftoverWindow();
-	const ensureAlarm = async () => {
-		if (!api.alarms) return;
-		if (!(await api.alarms.get(FINISH_ALARM))) api.alarms.create(FINISH_ALARM, { periodInMinutes: FINISH_PERIOD_MINUTES });
-	};
-	api.alarms?.onAlarm.addListener((alarm: { name: string }) => {
-		if (alarm.name === FINISH_ALARM) void runFinish('alarm');
-	});
-	api.idle?.setDetectionInterval?.(IDLE_INTERVAL_SECONDS);
-	api.idle?.onStateChanged?.addListener((state: string) => {
-		if (state === 'active') void runFinish('idle');
-	});
-	browser.runtime.onStartup?.addListener(() => {
-		void ensureAlarm().then(() => runFinish('startup'));
-	});
-	browser.runtime.onInstalled.addListener(() => { void ensureAlarm(); });
-
 	browser.runtime.onMessage.addListener((request: unknown, sender: unknown, sendResponse: (r?: any) => void): true | undefined => {
 		const req = request as { action?: string; enabled?: boolean };
-		if (!req || typeof req !== 'object') return undefined;
-		if (req.action !== 'finishNow' && req.action !== 'finishSetEnabled') return undefined;
-		if (!trustedSender(sender)) return undefined;
-		if (req.action === 'finishSetEnabled' && (sender as any)?.tab) return undefined;
-		if (req.action === 'finishNow') {
-			runFinish('now').then((result) => sendResponse({ ok: true, result })).catch((e) => sendResponse({ ok: false, error: String(e) }));
-			return true;
-		}
-		if (req.action === 'finishSetEnabled') {
-			void (async () => {
-				const state = await loadFinishState(store);
-				state.enabled = !!req.enabled;
-				await saveFinishState(store, state);
-				sendResponse({ ok: true });
-			})();
-			return true;
-		}
-		return undefined;
+		if (!req || typeof req !== 'object' || req.action !== 'finishSetEnabled') return undefined;
+		if (!trustedSender(sender) || (sender as any)?.tab) return undefined;
+		void (async () => {
+			const state = await loadFinishState(store);
+			state.enabled = !!req.enabled;
+			await saveFinishState(store, state);
+			sendResponse({ ok: true });
+		})();
+		return true;
 	});
 }

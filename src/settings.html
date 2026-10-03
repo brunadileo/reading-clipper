@@ -155,11 +155,36 @@
 								<div class="setting-item setting-item-heading"><h3>Sync (experimental)</h3></div>
 								<div class="setting-items">
 								<div class="setting-item-description">Bring posts you saved on other sites into LazyReader. Each sync reads your own saved list in this browser, with your own login. Your login never reaches LazyReader. These sites have no official way to do this, so a sync can stop working without notice. Off by default.</div>
+								<div class="sync-service" data-service="schedule">
+									<div class="setting-item mod-horizontal">
+										<div class="setting-item-info">
+											<label for="sync-frequency">Sync with LazyReader</label>
+											<div class="setting-item-description">One schedule for everything below, while Chrome is open. The jobs run one after the other: finish waiting articles, then Substack, then Instagram. Never more often than once an hour. If Chrome was closed when a sync was due, it runs once when you are back.</div>
+										</div>
+										<div class="setting-item-control">
+											<select class="dropdown" id="sync-frequency">
+												<option value="hourly">Every hour</option>
+												<option value="every3h">Every 3 hours</option>
+												<option value="twiceDaily" selected>Twice a day</option>
+												<option value="daily">Once a day</option>
+												<option value="manual">Only when I press Sync now</option>
+											</select>
+										</div>
+									</div>
+									<div class="setting-item mod-horizontal">
+										<div class="setting-item-info">
+											<div class="setting-item-description" id="sync-schedule-status" role="status">No sync yet.</div>
+										</div>
+										<div class="setting-item-control">
+											<button class="btn" id="sync-all-now" type="button">Sync now</button>
+										</div>
+									</div>
+								</div>
 								<div class="sync-service" data-service="substack">
 									<div class="setting-item mod-horizontal mod-toggle">
 										<div class="setting-item-info">
 											<label for="sync-substack-toggle">Substack <span class="sync-badge">Experimental</span></label>
-											<div class="setting-item-description">Checks your Substack saves every 30 minutes while Chrome is open. The first run takes your newest 100.</div>
+											<div class="setting-item-description">Brings in your Substack saves on the sync schedule. The first run takes your newest 100.</div>
 										</div>
 										<div class="setting-item-control">
 											<div class="checkbox-container">
@@ -172,7 +197,6 @@
 											<div class="setting-item-description" id="sync-substack-status" role="status">Off</div>
 										</div>
 										<div class="setting-item-control">
-											<button class="btn" id="sync-substack-now" type="button">Sync now</button>
 											<button class="btn" id="sync-substack-older" type="button">Load older (100)</button>
 										</div>
 									</div>
@@ -181,7 +205,7 @@
 									<div class="setting-item mod-horizontal mod-toggle">
 										<div class="setting-item-info">
 											<label for="sync-instagram-toggle">Instagram <span class="sync-badge">Experimental</span></label>
-											<div class="setting-item-description">Only runs when you press Sync now, at most once an hour. Instagram can restrict accounts that use automated tools: you use this at your own risk. Needs your SociaVault key saved in LazyReader Settings.</div>
+											<div class="setting-item-description">Runs on the sync schedule, at most once an hour. Instagram can restrict accounts that use automated tools: you use this at your own risk. Needs your SociaVault key saved in LazyReader Settings.</div>
 										</div>
 										<div class="setting-item-control">
 											<div class="checkbox-container">
@@ -194,7 +218,6 @@
 											<div class="setting-item-description" id="sync-instagram-status" role="status">Off</div>
 										</div>
 										<div class="setting-item-control">
-											<button class="btn" id="sync-instagram-now" type="button">Sync now</button>
 											<button class="btn" id="sync-instagram-older" type="button">Load older (100)</button>
 										</div>
 									</div>
@@ -214,9 +237,6 @@
 									<div class="setting-item mod-horizontal">
 										<div class="setting-item-info">
 											<div class="setting-item-description" id="finish-status" role="status">Off</div>
-										</div>
-										<div class="setting-item-control">
-											<button class="btn" id="finish-now" type="button">Finish now</button>
 										</div>
 									</div>
 								</div>
