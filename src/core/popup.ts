@@ -1399,6 +1399,8 @@ async function handleClipObsidian(): Promise<void> {
 				setTimeout(() => window.close(), 1500);
 			}
 		} else if (result.status === 401) {
+			// The background already tried to fetch a fresh token through the
+			// lazyreader.app session; reaching here means no signed-in session.
 			showReadingRetry(getMessage('readingTokenRejected'));
 		} else {
 			// Reading's own error text when it sent one, so the popup says why.

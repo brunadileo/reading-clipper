@@ -1,5 +1,6 @@
 {
 	"manifest_version": 3,
+	"key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxIqg6N6bNId4TxB3EBPVPu6ODRilSUrdSFiDtZ2LzhGz+Ca7ePOJbjz5WDK9u0SCXsFSvWKYczEHxmRHznqqvGdOPLvR6GMpsG9XwQKwXd3zYQqqZKBIfCDa1ErPYqqM9xRgh2GNDdc0aP2q4PyGkRmxxBIADID3QmYDbJyyo+3p6BGibRp/L8RJsMek0cxqxCW7nKAlqJEnjxnFzRVOBKmup5OxFr/URQwiAa1EqGMtrv8JR/OWWjarCCYVzsvARJk5r5hTXOpqQ4OpMLmm2yfNXSk9igNVw4NfA7MdrU0/fLN+EzRvmBCj6EmjxWKhMhRSX2DYAznr4fvOo0zAsQIDAQAB",
 	"default_locale": "en",
 	"name": "LazyReader Clipper",
 	"homepage_url": "https://reader.lazyailabs.com",

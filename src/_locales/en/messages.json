@@ -897,7 +897,7 @@
 		"message": "Token"
 	},
 	"readingTokenRejected": {
-		"message": "Token not accepted. Copy it again from LazyReader, Settings."
+		"message": "Not connected to LazyReader. Sign in at lazyreader.app in this Chrome, then try again."
 	},
 	"recommended": {
 		"message": "recommended"

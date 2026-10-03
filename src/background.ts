@@ -9,6 +9,8 @@ import { incrementStat } from './utils/storage-utils';
 import { hasStoredHighlights } from './utils/url-utils';
 import { initSyncRunner } from './utils/sync-runner';
 import { initWaitingRunner } from './utils/waiting-runner';
+import { postCapture, type ReadingSendResult } from './utils/reading-sender';
+import { LAZYREADER_ORIGIN, refreshReadingToken } from './utils/reading-token';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -806,37 +808,36 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			const token = (typedRequest as any).token as string | undefined;
 			const body = (typedRequest as any).body;
 
-			if (!captureUrl || !token) {
-				sendResponse({ ok: false, status: 401, error: 'Missing capture URL or token' });
+			if (!captureUrl) {
+				sendResponse({ ok: false, error: 'Missing capture URL' });
 				return true;
 			}
 
-			fetch(captureUrl, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'x-reader-token': token
-				},
-				body: JSON.stringify(body)
-			}).then(async (response) => {
-				let data: any = undefined;
-				try {
-					data = await response.json();
-				} catch {
-					// Non-JSON or empty body; leave data undefined.
+			// No token, or a rejected one: fetch the current token through the
+			// user's LazyReader session and try once more.
+			(async () => {
+				let result = token ? await postCapture(body, captureUrl, token) : { ok: false, status: 401 } as ReadingSendResult;
+				if (result.status === 401) {
+					const fresh = await refreshReadingToken();
+					if (fresh) {
+						result = await postCapture(body, captureUrl, fresh);
+					} else {
+						result = { ok: false, status: 401, error: 'not-signed-in' };
+					}
 				}
-				sendResponse({
-					ok: response.ok,
-					status: response.status,
-					data,
-					error: response.ok ? undefined : (data?.error || `Request failed with status ${response.status}`)
-				});
-			}).catch((error) => {
-				sendResponse({
-					ok: false,
-					error: error instanceof Error ? error.message : String(error)
-				});
+				sendResponse(result);
+			})().catch((error) => {
+				sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) });
 			});
+			return true;
+		}
+
+		// The lazyreader.app relay asks for this on every page load, so a
+		// regenerated token reaches the clipper without a paste.
+		if (typedRequest.action === "refreshReadingToken") {
+			const tab = sender.tab;
+			if (tab?.id === undefined || !tab.url?.startsWith(LAZYREADER_ORIGIN + '/')) return undefined;
+			refreshReadingToken(tab.id).then((t) => sendResponse({ ok: !!t })).catch(() => sendResponse({ ok: false }));
 			return true;
 		}
 

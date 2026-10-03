@@ -13,4 +13,12 @@ if (location.origin === ORIGIN) {
 			window.postMessage({ type: 'lazyreader:finish-result', result: result ?? null }, ORIGIN);
 		});
 	});
+	// Keeps the clipper's capture token current: the background worker reads
+	// the session from this tab and fetches the token itself. Nothing secret
+	// passes through this script.
+	window.addEventListener('load', () => {
+		setTimeout(() => {
+			chrome.runtime.sendMessage({ action: 'refreshReadingToken' }, () => void chrome.runtime.lastError);
+		}, 1500);
+	});
 }
