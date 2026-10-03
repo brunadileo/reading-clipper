@@ -49,7 +49,9 @@ module.exports = (env, argv) => {
 			style: './src/style.scss',
 			highlighter: './src/highlighter.scss',
 			reader: './src/reader.scss',
-			'reader-script': './src/reader-script.ts'
+			'reader-script': './src/reader-script.ts',
+			offscreen: './src/offscreen.ts',
+			'lazyreader-relay': './src/lazyreader-relay.ts'
 		},
 		output: {
 			path: path.resolve(__dirname, outputDir),
@@ -145,6 +147,7 @@ module.exports = (env, argv) => {
 						to: "manifest.json" 
 					},
 					{ from: "src/popup.html", to: "popup.html" },
+					{ from: "src/offscreen.html", to: "offscreen.html" },
 					{ from: "src/side-panel.html", to: "side-panel.html" },
 					{ from: "src/settings.html", to: "settings.html" },
 					{ from: "src/highlights.html", to: "highlights.html" },

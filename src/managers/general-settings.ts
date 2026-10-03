@@ -13,6 +13,7 @@ import { exportHighlights, importHighlights } from './highlights-manager';
 import { getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { debounce } from '../utils/debounce';
 import { initializeSyncSettings } from './sync-settings';
+import { initializeFinishSettings } from './finish-settings';
 import browser from '../utils/browser-polyfill';
 import { createUsageChart, aggregateUsageData, UsageMetric } from '../utils/charts';
 import { getClipHistory } from '../utils/storage-utils';
@@ -240,6 +241,7 @@ export function initializeGeneralSettings(): void {
 		updateVaultList();
 		await initializeReadingSettings();
 		initializeSyncSettings();
+		initializeFinishSettings();
 		initializeShowMoreActionsToggle();
 		initializeBetaFeaturesToggle();
 		initializeLegacyModeToggle();

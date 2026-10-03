@@ -8,6 +8,7 @@ import { debugLog } from './utils/debug';
 import { incrementStat } from './utils/storage-utils';
 import { hasStoredHighlights } from './utils/url-utils';
 import { initSyncRunner } from './utils/sync-runner';
+import { initWaitingRunner } from './utils/waiting-runner';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -1207,6 +1208,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 
 // READ-37/39: Substack and Instagram sync (off until the user turns each on in Settings).
 initSyncRunner();
+initWaitingRunner();
 
 // Initialize the extension
 initialize().catch(error => {

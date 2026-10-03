@@ -14,7 +14,9 @@
 		"storage",
 		"scripting",
 		"declarativeNetRequest",
-		"alarms"
+		"alarms",
+		"idle",
+		"offscreen"
 	],
 	"host_permissions": [
 		"<all_urls>",
@@ -49,6 +51,11 @@
 		{
 			"matches": ["http://*/*", "https://*/*"],
 			"js": ["content-loader.js"]
+		},
+		{
+			"matches": ["https://lazyreader.app/*"],
+			"js": ["lazyreader-relay.js"],
+			"run_at": "document_start"
 		}
 	],
 	"web_accessible_resources": [
