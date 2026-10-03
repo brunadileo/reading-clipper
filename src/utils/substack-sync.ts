@@ -111,7 +111,21 @@ export async function fetchPostText(deps: SyncDeps, post: SyncPost): Promise<str
 	const html = typeof body?.body_html === 'string' ? body.body_html : '';
 	const text = htmlToText(html);
 	if (countWords(text) < MIN_WORDS || looksLikeLoginPage(text)) return null;
-	return text;
+	return isPreview(body, text) ? text + PREVIEW_NOTE : text;
+}
+
+export const PREVIEW_NOTE =
+	'\n\n[LazyReader: this is the free preview of a paid post. The rest is for paying subscribers.]';
+
+/**
+ * A paid post the user does not pay for comes back cut short (seen 2026-10-03:
+ * 1,300 of 2,080 and 876 of 1,914 words, with truncated_body_text set).
+ */
+export function isPreview(body: any, text: string): boolean {
+	if (!body || body.audience === 'everyone' || body.audience === undefined) return false;
+	if (body.truncated_body_text) return true;
+	const full = Number(body.wordcount);
+	return Number.isFinite(full) && full > 0 && countWords(text) < full * 0.8;
 }
 
 function remember(state: SyncState, id: string): void {

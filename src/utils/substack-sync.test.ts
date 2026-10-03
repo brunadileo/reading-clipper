@@ -172,3 +172,14 @@ describe('runSubstackSync', () => {
 		expect(sleeps.every((s) => s >= 2000 && s <= 4000)).toBe(true);
 	});
 });
+
+describe('isPreview', () => {
+	it('flags a paid post that came back short', async () => {
+		const { isPreview } = await import('./substack-sync');
+		const words = (n: number) => Array.from({ length: n }, () => 'w').join(' ');
+		expect(isPreview({ audience: 'only_paid', wordcount: 2080, truncated_body_text: 'x' }, words(1300))).toBe(true);
+		expect(isPreview({ audience: 'only_paid', wordcount: 1914 }, words(876))).toBe(true);
+		expect(isPreview({ audience: 'only_paid', wordcount: 1000 }, words(990))).toBe(false);
+		expect(isPreview({ audience: 'everyone', wordcount: 2000 }, words(500))).toBe(false);
+	});
+});
