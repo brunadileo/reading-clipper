@@ -1,10 +1,26 @@
 // Scrolls lazy-loading pages (Notion and similar) to the bottom so that
 // off-screen blocks get drawn before extraction. Used only by the LazyReader
 // save (message flag `scrollToLoad`). Restores scroll positions afterwards.
+// Normal articles are never scrolled: only known lazy hosts and pages whose
+// content lives in an inner overflow scroller (see pickScrollers).
 
 export const SCROLL_STEP_MS = 120;
 export const SCROLL_MAX_MS = 2500;
 export const SCROLL_STALL_STEPS = 3;
+
+export function isLazyHost(hostname: string): boolean {
+	return hostname === 'notion.so' || hostname.endsWith('.notion.so') || hostname.endsWith('.notion.site');
+}
+
+// Decides what to scroll. Lazy hosts: the document root plus inner scrollers.
+// Any other page: inner scrollers only, so a page whose sole scroller is the
+// document root returns [] and is not scrolled at all.
+export function pickScrollers(doc: Document, hostname: string = doc.location?.hostname || ''): HTMLElement[] {
+	const all = findScrollers(doc);
+	if (isLazyHost(hostname)) return all;
+	const root = doc.scrollingElement;
+	return all.filter(el => el !== root);
+}
 
 function findScrollers(doc: Document): HTMLElement[] {
 	const list: HTMLElement[] = [];
@@ -36,7 +52,7 @@ function findScrollers(doc: Document): HTMLElement[] {
 // Scrolls to the bottom (or until the budget ends) and returns a function that
 // restores the original positions. The caller restores AFTER extraction.
 export async function scrollToLoad(doc: Document = document): Promise<() => void> {
-	const scrollers = findScrollers(doc);
+	const scrollers = pickScrollers(doc);
 	const saved = scrollers.map(el => el.scrollTop);
 	const restore = () => { scrollers.forEach((el, i) => { el.scrollTop = saved[i]; }); };
 	if (!scrollers.length) return restore;
