@@ -5,7 +5,7 @@
 import browser from '../utils/browser-polyfill';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
-import { describeScheduleStatus, isFrequency, loadSchedule } from '../utils/sync-schedule';
+import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
 
 const ORIGINS: Record<SyncService, string[]> = {
 	substack: ['https://substack.com/*', 'https://*.substack.com/*'],
@@ -90,6 +90,7 @@ function setupService(service: SyncService): void {
 		try {
 			const res: any = await browser.runtime.sendMessage({ action: 'syncRun', service, kind: 'older' });
 			if (res?.result?.skipped === 'busy') {
+				await refresh(service);
 				if (status) status.textContent = 'A sync is already running. Try again when it ends.';
 				return;
 			}
@@ -111,7 +112,7 @@ async function refreshSchedule(): Promise<void> {
 	const now = document.getElementById('sync-all-now') as HTMLButtonElement | null;
 	if (select && document.activeElement !== select) select.value = state.frequency;
 	if (status) status.textContent = describeScheduleStatus(state, Date.now());
-	if (now) now.disabled = state.running;
+	if (now) now.disabled = isRunning(state, Date.now());
 }
 
 function setupSchedule(): void {
@@ -131,9 +132,14 @@ function setupSchedule(): void {
 			const res: any = await browser.runtime.sendMessage({ action: 'syncNow' });
 			if (res?.result?.skipped === 'busy' && status) status.textContent = 'A sync is already running.';
 			else if (res?.result?.skipped === 'nothing-to-run' && status) status.textContent = 'Nothing is switched on to sync.';
+			else if (!res?.ok && status) status.textContent = 'Sync did not start. Reopen this page and try again.';
 			else await refreshSchedule();
 		} catch (e) {
 			if (status) status.textContent = `Sync failed: ${e instanceof Error ? e.message : String(e)}`;
+		} finally {
+			// A skipped run writes nothing, so no storage event would re-enable the button.
+			const state = await loadSchedule(store).catch(() => null);
+			now.disabled = !!state && isRunning(state, Date.now());
 		}
 	});
 	void refreshSchedule();

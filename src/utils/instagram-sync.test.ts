@@ -90,6 +90,23 @@ describe('runInstagramSync', () => {
 		expect(fetchFn.calls).toEqual([]);
 	});
 
+	it('a scheduled run after a scheduled run leaves the hourly floor to the shared schedule', async () => {
+		const { deps, fetchFn, store } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000, lastAttemptScheduled: true }) });
+		(deps as any).now = () => 1_000_000 + 55 * 60 * 1000;
+		const r = await runInstagramSync(deps, 'scheduled');
+		expect(r.stopped).toBeNull();
+		expect(fetchFn.calls.length).toBeGreaterThan(0);
+		expect(store.data['sync:instagram'].lastAttemptScheduled).toBe(true);
+	});
+
+	it('a scheduled run soon after Load older or Sync now still waits the hour', async () => {
+		const { deps, fetchFn } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000, lastAttemptScheduled: false }) });
+		(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+		const r = await runInstagramSync(deps, 'scheduled');
+		expect(r.stopped).toBe('too-soon');
+		expect(fetchFn.calls).toEqual([]);
+	});
+
 	it('stops on 429 with a plain message and no retry', async () => {
 		const { deps, fetchFn, store } = makeDeps({ route: igRoute(50, { listStatus: 429 }), store: enabled() });
 		const r = await runInstagramSync(deps, 'sync');

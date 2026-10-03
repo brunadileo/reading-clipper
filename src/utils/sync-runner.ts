@@ -9,10 +9,10 @@ import { DEFAULT_READING_LANE, loadReadingSettings } from './storage-utils';
 import { loadState, saveState, type SyncDeps, type SyncService } from './sync-core';
 import { runSubstackSync } from './substack-sync';
 import { runInstagramSync } from './instagram-sync';
-import { finishSupported, runFinish, trustedSender } from './waiting-runner';
+import { finishSupported, ownPageSender, runFinish, trustedSender } from './waiting-runner';
 import { isEnabled, loadFinishState } from './waiting-finisher';
 import {
-	isFrequency, loadSchedule, nextDueAt, runSequence, saveSchedule,
+	intervalMinutes, isFrequency, loadSchedule, nextDueAt, runSequence, saveSchedule,
 	type SequenceTrigger, type SyncJob,
 } from './sync-schedule';
 
@@ -93,7 +93,9 @@ function buildJobs(manual: boolean): SyncJob[] {
 			name: 'Instagram',
 			enabled: () => isOn('instagram'),
 			run: async () => {
-				const r = await runInstagramSync(makeDeps('instagram'), 'sync');
+				// Scheduled runs lean on the shared one-hour floor when the previous
+				// Instagram attempt was scheduled too (see instagram-sync.ts).
+				const r = await runInstagramSync(makeDeps('instagram'), manual ? 'sync' : 'scheduled');
 				if (r.stopped) return r.message ?? `stopped (${r.stopped})`;
 				return `${r.sent} saved`;
 			},
@@ -101,23 +103,28 @@ function buildJobs(manual: boolean): SyncJob[] {
 	];
 }
 
-/** One alarm, set to the next due time. Manual frequency means no alarm at all. */
-export async function scheduleAlarm(force: boolean): Promise<void> {
+/**
+ * One alarm, set to the next due time. Manual frequency means no alarm at all.
+ * fullInterval pushes it a whole interval out (used when nothing was switched
+ * on, so an overdue clock does not re-fire the alarm every 30 seconds).
+ */
+export async function scheduleAlarm(force: boolean, fullInterval = false): Promise<void> {
 	const api = alarms();
 	if (!api) return;
 	if (!force && (await api.get(SYNC_ALARM))) return;
 	await api.clear(SYNC_ALARM);
 	const state = await loadSchedule(store);
 	const now = Date.now();
-	const due = nextDueAt(state.frequency, state.lastRunAt, now);
+	let due = nextDueAt(state.frequency, state.lastRunAt, now);
 	if (due === null) return;
+	if (fullInterval) due = Math.max(due, now + (intervalMinutes(state.frequency) ?? 0) * 60_000);
 	api.create(SYNC_ALARM, { when: Math.max(due, now + 1000) });
 }
 
 /** The whole sequence (scheduled, catch-up or Sync now), then the next alarm. */
 export async function runAll(trigger: SequenceTrigger) {
 	const result = await runSequence(buildJobs(trigger === 'now'), sequenceDeps, trigger);
-	if (result.skipped !== 'busy') await scheduleAlarm(true);
+	if (result.skipped !== 'busy') await scheduleAlarm(true, result.skipped === 'nothing-to-run');
 	return result;
 }
 
@@ -166,7 +173,8 @@ export function initSyncRunner(): void {
 	browser.runtime.onMessage.addListener((request: unknown, sender: unknown, sendResponse: (r?: any) => void): true | undefined => {
 		const req = request as { action?: string; service?: SyncService; enabled?: boolean; kind?: string; frequency?: unknown };
 		if (!req || typeof req !== 'object') return undefined;
-		const fromSettings = trustedSender(sender) && !(sender as any)?.tab;
+		// Settings opens in a tab, so the page URL (not sender.tab) marks our own pages.
+		const fromSettings = ownPageSender(sender);
 		const reply = (p: Promise<unknown>) => {
 			p.then((result) => sendResponse({ ok: true, result })).catch((e) => sendResponse({ ok: false, error: String(e) }));
 			return true as const;

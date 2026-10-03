@@ -1,5 +1,6 @@
-// READ-39: bring the user's Instagram Saved posts into LazyReader on a button
-// press, from inside their own signed-in browser. Never scheduled. The login
+// READ-39: bring the user's Instagram Saved posts into LazyReader from inside
+// their own signed-in browser. Runs on the shared clipper schedule (READ-181
+// choice 26), on Sync now, and on Load older. The login
 // cookie stays in the browser; only post links go to LazyReader.
 //
 // ASSUMED SHAPES (from reading-wiki/scripts/instagram_saved_list.py, not yet
@@ -22,7 +23,9 @@ export const IG_STOP_AFTER_KNOWN = 3;
 export const IG_MIN_INTERVAL_MS = 60 * 60 * 1000;
 export const IG_CREDIT_WARNING_OVER = 20;
 
-export type InstagramRunKind = 'sync' | 'older';
+// 'scheduled': a run from the shared clipper schedule, whose own floor is one
+// hour between runs, so Instagram's per-service gate is not applied twice.
+export type InstagramRunKind = 'sync' | 'older' | 'scheduled';
 
 export interface InstagramRunResult {
 	sent: number;
@@ -77,14 +80,20 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 	const state = await loadState(deps.store, 'instagram');
 	if (!state.enabled) return out;
 	if (state.running && deps.now() - (state.lastAttemptAt ?? 0) < 15 * 60 * 1000) return out;
-	if (state.lastAttemptAt !== null && deps.now() - state.lastAttemptAt < IG_MIN_INTERVAL_MS) {
+	// Schedule after schedule: the shared floor already spaces runs an hour apart
+	// (Instagram's start drifts with the jobs before it). Any manual run in
+	// between (Sync now, Load older) keeps Instagram's own one-hour gate.
+	const scheduleOwnsFloor = kind === 'scheduled' && state.lastAttemptScheduled === true;
+	if (!scheduleOwnsFloor && state.lastAttemptAt !== null && deps.now() - state.lastAttemptAt < IG_MIN_INTERVAL_MS) {
 		out.stopped = 'too-soon';
 		out.message = 'Instagram sync runs at most once an hour. Try again later.';
 		return out;
 	}
 	const previousAttempt = state.lastAttemptAt;
+	const previousScheduled = state.lastAttemptScheduled;
 	state.running = true;
 	state.lastAttemptAt = deps.now();
+	state.lastAttemptScheduled = kind === 'scheduled';
 	await saveState(deps.store, 'instagram', state);
 
 	const finish = async (stopped: InstagramRunResult['stopped'], message: string | null) => {
@@ -92,7 +101,7 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 		out.message = message;
 		state.running = false;
 		state.lastRunAt = deps.now();
-		if (stopped === 'signed-out') { state.signedOut = true; state.lastError = null; state.lastAttemptAt = previousAttempt; }
+		if (stopped === 'signed-out') { state.signedOut = true; state.lastError = null; state.lastAttemptAt = previousAttempt; state.lastAttemptScheduled = previousScheduled; }
 		else if (stopped) state.lastError = message;
 		else { state.lastSuccess = deps.now(); state.lastError = null; state.signedOut = false; }
 		state.lastResult = `${out.sent} saved`;

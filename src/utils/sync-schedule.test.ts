@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { memoryStore } from './sync-test-helpers';
 import {
-	intervalMinutes, isDue, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
+	intervalMinutes, isDue, isOwnPageSender, isRunning, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
 	JOB_PAUSE_MS, SCHEDULE_KEY, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
 } from './sync-schedule';
 
@@ -187,5 +187,20 @@ describe('status line', () => {
 		const done = { ...base, running: false, step: null, lastFinishedAt: 0, lastSummary: 'Substack: 2 saved' };
 		expect(describeScheduleStatus(done, 5 * 60_000)).toBe('Last sync 5 min ago. Substack: 2 saved');
 		expect(describeScheduleStatus({ ...done, lastFinishedAt: null, lastSummary: null }, 0)).toBe('No sync yet.');
+	});
+});
+
+describe('stale lock and senders', () => {
+	it('a running flag older than the stale limit no longer counts as running', () => {
+		expect(isRunning({ running: true, lastAttemptAt: 0 }, STALE_RUN_MS - 1)).toBe(true);
+		expect(isRunning({ running: true, lastAttemptAt: 0 }, STALE_RUN_MS)).toBe(false);
+		expect(isRunning({ running: false, lastAttemptAt: 0 }, 1)).toBe(false);
+	});
+	it('the settings page in a tab is our own page; content scripts and other extensions are not', () => {
+		const base = 'chrome-extension://abc/';
+		expect(isOwnPageSender({ id: 'abc', url: `${base}settings.html`, tab: { id: 1 } }, 'abc', base)).toBe(true);
+		expect(isOwnPageSender({ id: 'abc', url: 'https://lazyreader.app/x', tab: { id: 1 } }, 'abc', base)).toBe(false);
+		expect(isOwnPageSender({ id: 'other', url: `${base}settings.html` }, 'abc', base)).toBe(false);
+		expect(isOwnPageSender({ id: 'abc' }, 'abc', base)).toBe(false);
 	});
 });

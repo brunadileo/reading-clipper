@@ -125,7 +125,7 @@ export async function runSequence(
 		const state = await loadSchedule(deps.store);
 		const scheduled = trigger === 'alarm' || trigger === 'startup' || trigger === 'idle';
 		const now = deps.now();
-		if (state.running && state.lastAttemptAt !== null && now - state.lastAttemptAt < STALE_RUN_MS) { out.skipped = 'busy'; return out; }
+		if (isRunning(state, now)) { out.skipped = 'busy'; return out; }
 		if (scheduled) {
 			if (state.frequency === 'manual') { out.skipped = 'manual'; return out; }
 			if (!isDue(state.frequency, state.lastRunAt, now)) { out.skipped = 'not-due'; return out; }
@@ -184,9 +184,24 @@ const ago = (ms: number): string => {
 	return mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
 };
 
+/** A stored running flag counts only while fresh; a worker killed mid-run leaves a stale one. */
+export const isRunning = (s: Pick<ScheduleState, 'running' | 'lastAttemptAt'>, now: number): boolean =>
+	s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < STALE_RUN_MS;
+
+/**
+ * Pure: a message came from one of the clipper's own pages (settings, side
+ * panel). Those pages run in a tab (options open_in_tab), so sender.tab is set
+ * for them too; the page URL is what tells them apart from content scripts.
+ */
+export function isOwnPageSender(sender: any, runtimeId: string, extensionBaseUrl: string): boolean {
+	if (!sender || sender.id !== runtimeId) return false;
+	const url = typeof sender.url === 'string' ? sender.url : '';
+	return extensionBaseUrl !== '' && url.startsWith(extensionBaseUrl);
+}
+
 /** Pure: the one status line for the schedule. */
 export function describeScheduleStatus(s: ScheduleState, now: number): string {
-	if (s.running && s.step && s.lastAttemptAt !== null && now - s.lastAttemptAt < STALE_RUN_MS) {
+	if (isRunning(s, now) && s.step) {
 		return `${s.step.index} of ${s.step.total}: ${s.step.name}`;
 	}
 	if (s.lastFinishedAt === null) return 'No sync yet.';

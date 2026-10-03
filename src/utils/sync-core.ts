@@ -23,6 +23,9 @@ export interface SyncState {
 	lastSuccess: number | null;
 	lastRunAt: number | null;
 	lastAttemptAt: number | null;
+	// Instagram only (READ-181): the last attempt came from the shared schedule,
+	// whose one-hour floor then stands in for Instagram's own gate.
+	lastAttemptScheduled?: boolean;
 	// 'signed-out' is a state, not an error: the settings page words it softly.
 	lastError: string | null;
 	signedOut: boolean;

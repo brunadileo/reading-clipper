@@ -4,6 +4,7 @@ import browser from './browser-polyfill';
 import { loadReadingSettings } from './storage-utils';
 import { createWaitingApi } from './waiting-api';
 import { isSafeFetchUrl } from './full-text-check';
+import { isOwnPageSender } from './sync-schedule';
 import {
 	loadFinishState, runFinisher, saveFinishState, MAX_HTML_BYTES,
 	type FinisherDeps, type FinishTrigger,
@@ -199,12 +200,17 @@ export async function runFinish(trigger: FinishTrigger) {
 // Only the clipper's own pages and its lazyreader.app relay may ask for a run.
 export function trustedSender(sender: any): boolean {
 	if (!sender || sender.id !== browser.runtime.id) return false;
-	if (!sender.tab) return true;
+	if (!sender.tab || ownPageSender(sender)) return true;
 	try {
 		return new URL(sender.url || sender.tab.url || '').origin === 'https://lazyreader.app';
 	} catch {
 		return false;
 	}
+}
+
+/** The clipper's own pages only (settings runs in a tab, so sender.tab alone says nothing). */
+export function ownPageSender(sender: any): boolean {
+	return isOwnPageSender(sender, browser.runtime.id, browser.runtime.getURL(''));
 }
 
 // The triggers (alarm, startup, idle, Finish now) moved to sync-runner.ts with
@@ -215,7 +221,7 @@ export function initWaitingRunner(): void {
 	browser.runtime.onMessage.addListener((request: unknown, sender: unknown, sendResponse: (r?: any) => void): true | undefined => {
 		const req = request as { action?: string; enabled?: boolean };
 		if (!req || typeof req !== 'object' || req.action !== 'finishSetEnabled') return undefined;
-		if (!trustedSender(sender) || (sender as any)?.tab) return undefined;
+		if (!ownPageSender(sender)) return undefined;
 		void (async () => {
 			const state = await loadFinishState(store);
 			state.enabled = !!req.enabled;
