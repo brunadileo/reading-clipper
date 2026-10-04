@@ -272,3 +272,15 @@ describe('runFinisher', () => {
 		expect(fetched).toEqual([]);
 	});
 });
+
+describe('describeFinishStatus wording', () => {
+	it('no token points to Connection', async () => {
+		const { describeFinishStatus, emptyFinishState } = await import('./waiting-finisher');
+		expect(describeFinishStatus(emptyFinishState(), false, 0)).toBe('Connect to LazyReader first (see Connection).');
+	});
+	it('every status line starts with a capital letter', async () => {
+		const { describeFinishStatus, emptyFinishState } = await import('./waiting-finisher');
+		const s = { ...emptyFinishState(), enabled: true, lastRunAt: 0 };
+		expect(describeFinishStatus(s, true, 5 * 60000)).toMatch(/^[A-Z0-9]/);
+	});
+});

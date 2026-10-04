@@ -3,6 +3,7 @@
 // that service only (optional_host_permissions); turning it off keeps the
 // permission but stops the sync. Text is plain English, not i18n keys.
 import browser from '../utils/browser-polyfill';
+import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
 import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
@@ -45,7 +46,7 @@ async function refresh(service: SyncService): Promise<void> {
 		toggle.checked = state.enabled;
 		toggle.closest('.checkbox-container')?.classList.toggle('is-enabled', state.enabled);
 	}
-	if (status) status.textContent = describeSyncStatus(service, state, Date.now());
+	setText(status, describeSyncStatus(service, state, Date.now()));
 	if (older) {
 		older.disabled = !state.enabled || state.running || state.olderExhausted;
 		older.hidden = !state.enabled;
@@ -117,14 +118,19 @@ async function refreshSchedule(): Promise<void> {
 	const freqHint = document.getElementById('sync-frequency-hint');
 	const running = isRunning(state, Date.now());
 	if (select && document.activeElement !== select) select.value = state.frequency;
-	if (status) status.textContent = describeScheduleStatus(state, Date.now());
+	setText(status, describeScheduleStatus(state, Date.now()));
 	if (now) now.disabled = running;
-	if (pip) pip.classList.toggle('run', running);
-	if (freqHint) {
-		freqHint.textContent = state.frequency === 'manual'
-			? 'Runs only when you press Sync now.'
-			: 'Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.';
+	if (pip) {
+		// Grey before the first sync, blue pulse while running, amber when the last
+		// summary reports a failure or stop, green otherwise.
+		const failed = !!state.lastSummary && /failed|error|stopped \((?!too-soon)/i.test(state.lastSummary);
+		pip.classList.toggle('run', running);
+		pip.classList.toggle('warn', !running && state.lastFinishedAt !== null && failed);
+		pip.classList.toggle('ok', !running && state.lastFinishedAt !== null && !failed);
 	}
+	setText(freqHint, state.frequency === 'manual'
+		? 'Runs only when you press Sync now.'
+		: 'Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.');
 }
 
 function setupSchedule(): void {

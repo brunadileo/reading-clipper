@@ -16,7 +16,7 @@
 				</header>
 				<nav id="sidebar" class="lr-nav" aria-label="Settings sections">
 					<ul>
-						<li data-section="connection"><button type="button">Connection<span class="dot" id="nav-connection-dot" hidden></span></button></li>
+						<li data-section="connection"><button type="button">Connection<span class="dot" id="nav-connection-dot" hidden></span><span class="lr-sr-only" id="nav-connection-sr" hidden> (not connected)</span></button></li>
 						<li data-section="sync"><button type="button">Sync</button></li>
 						<li data-section="shortcuts"><button type="button">Shortcuts</button></li>
 						<li data-section="about"><button type="button">About</button></li>
@@ -28,12 +28,12 @@
 						<h2 class="lr-h2">Connection</h2>
 						<p class="lr-sub">Where your saves go. The clipper uses your LazyReader sign-in in this Chrome, so there is nothing to paste.</p>
 						<div class="lr-status" id="connection-status" role="status" data-state="disconnected">
-							<span class="lr-pip warn" id="connection-pip"></span>
+							<span class="lr-pip" id="connection-pip"></span>
 							<div class="main">
-								<div class="t" id="connection-state">Not connected</div>
-								<div class="hint" id="connection-hint">Sign in to lazyreader.app in this Chrome. This page connects by itself once you are in.</div>
+								<div class="t" id="connection-state">Checking connection</div>
+								<div class="hint" id="connection-hint"></div>
 							</div>
-							<button type="button" class="lr-btn primary" id="connection-action">Sign in</button>
+							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in</button>
 						</div>
 						<details class="lr-details" id="connection-advanced">
 							<summary>Advanced: server address and token</summary>
@@ -69,7 +69,7 @@
 						</div>
 						<p class="hint lr-tight" id="sync-frequency-hint">Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.</p>
 						<div class="lr-status">
-							<span class="lr-pip ok" id="sync-pip"></span>
+							<span class="lr-pip" id="sync-pip"></span>
 							<div class="main"><div class="t" id="sync-schedule-status" role="status">No sync yet.</div></div>
 						</div>
 						<h3 class="lr-h3">Runs in this order</h3>
@@ -81,7 +81,7 @@
 									<div class="t">Substack <span class="lr-tag">Experimental</span></div>
 									<div class="d">Your newest saves, every sync. The first run takes your newest 100.</div>
 									<div class="d" id="sync-substack-status" role="status">Off</div>
-									<button class="lr-btn link" id="sync-substack-older" type="button">Load 100 older saves</button>
+									<button class="lr-btn link" id="sync-substack-older" type="button" hidden>Load 100 older saves</button>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="sync-substack-toggle" role="switch" aria-label="Substack sync" /></div>
 							</div>
@@ -91,7 +91,7 @@
 									<div class="t">Instagram <span class="lr-tag">Experimental</span></div>
 									<div class="d">Saved posts, at most once an hour. Instagram can restrict accounts that use automated tools, so turn it on at your own risk. Needs your SociaVault key in LazyReader Settings.</div>
 									<div class="d" id="sync-instagram-status" role="status">Off</div>
-									<button class="lr-btn link" id="sync-instagram-older" type="button">Load 100 older saves</button>
+									<button class="lr-btn link" id="sync-instagram-older" type="button" hidden>Load 100 older saves</button>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
 							</div>
@@ -101,7 +101,7 @@
 									<div class="t">Finish waiting articles</div>
 									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what steps 1 and 2 just saved.</div>
 									<div class="d" id="finish-status" role="status">Off</div>
-									<a class="lr-btn link" id="finish-open-list" href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
+									<a class="lr-btn link" id="finish-open-list" hidden href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
 							</div>

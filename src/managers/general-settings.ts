@@ -14,7 +14,7 @@ import { getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { debounce } from '../utils/debounce';
 import { initializeSyncSettings } from './sync-settings';
 import { initializeFinishSettings } from './finish-settings';
-import { initializeConnectionSettings } from './connection-settings';
+import { initializeConnectionSettings, setFieldValue } from './connection-settings';
 import { SHORTCUT_ORDER, SHORTCUT_ROWS, shortcutKeys } from '../utils/shortcut-display';
 import browser from '../utils/browser-polyfill';
 import { createUsageChart, aggregateUsageData, UsageMetric } from '../utils/charts';
@@ -80,20 +80,33 @@ async function initializeReadingSettings(): Promise<void> {
 	if (!captureUrlInput || !tokenInput) return;
 
 	const readingSettings = await loadReadingSettings();
-	captureUrlInput.value = readingSettings.captureUrl;
-	tokenInput.value = readingSettings.token;
+	setFieldValue(captureUrlInput, readingSettings.captureUrl);
+	setFieldValue(tokenInput, readingSettings.token);
 
-	const saveCaptureUrl = debounce(() => {
-		saveReadingSettings({ captureUrl: captureUrlInput.value.trim() || DEFAULT_READING_CAPTURE_URL });
-	}, 500);
-	const saveToken = debounce(() => {
-		saveReadingSettings({ token: tokenInput.value.trim() });
-	}, 500);
+	// Typing saves after a short pause; leaving the field (change) saves at once.
+	// The value just saved is remembered so a storage refresh never overwrites
+	// an edit that is still waiting to be saved.
+	const saveCaptureUrl = () => {
+		const value = captureUrlInput.value.trim() || DEFAULT_READING_CAPTURE_URL;
+		void saveReadingSettings({ captureUrl: value }).then(() => {
+			if (captureUrlInput.value.trim() === value || !captureUrlInput.value.trim()) captureUrlInput.dataset.lrWritten = captureUrlInput.value;
+		});
+	};
+	const saveToken = () => {
+		const value = tokenInput.value.trim();
+		void saveReadingSettings({ token: value }).then(() => {
+			if (tokenInput.value.trim() === value) tokenInput.dataset.lrWritten = tokenInput.value;
+		});
+	};
+	const saveCaptureUrlSoon = debounce(saveCaptureUrl, 500);
+	const saveTokenSoon = debounce(saveToken, 500);
 
-	captureUrlInput.addEventListener('input', saveCaptureUrl);
+	captureUrlInput.addEventListener('input', saveCaptureUrlSoon);
 	captureUrlInput.addEventListener('change', saveCaptureUrl);
-	tokenInput.addEventListener('input', saveToken);
+	captureUrlInput.addEventListener('blur', saveCaptureUrl);
+	tokenInput.addEventListener('input', saveTokenSoon);
 	tokenInput.addEventListener('change', saveToken);
+	tokenInput.addEventListener('blur', saveToken);
 }
 
 export function addVault(vault: string): void {
@@ -197,14 +210,24 @@ async function initializeVersionDisplay(): Promise<void> {
 	}
 }
 
+// Obsidian-only setup must never stop the LazyReader groups from loading.
+async function safely(name: string, fn: () => unknown): Promise<void> {
+	try {
+		await fn();
+	} catch (error) {
+		console.error(`Settings: ${name} failed`, error);
+	}
+}
+
 export function initializeGeneralSettings(): void {
 	loadSettings().then(async () => {
-		await setupLanguageAndDirection();
+		await safely('language', setupLanguageAndDirection);
 
 		// Add version check initialization
-		await initializeVersionDisplay();
+		await safely('version', initializeVersionDisplay);
 
-		// Get clip history and ratings
+		// Get clip history and ratings (Obsidian rating prompt)
+		await safely('rating', async () => {
 		const history = await getClipHistory();
 		const totalClips = history.filter(entry => entry.action !== 'readerMode').length;
 		const existingRatings = await getLocalStorage('ratings') || [];
@@ -240,18 +263,25 @@ export function initializeGeneralSettings(): void {
 			}
 		}
 
+		}); // end rating
+
+		// The LazyReader groups first; each one is isolated from the rest.
+		await safely('reading settings', initializeReadingSettings);
+		await safely('connection', async () => initializeConnectionSettings());
+		await safely('sync', async () => initializeSyncSettings());
+		await safely('finish', async () => initializeFinishSettings());
+		await safely('shortcuts', initializeKeyboardShortcuts);
+		await safely('toggles', async () => initializeToggles());
+
+		// Everything below is Obsidian-only and hidden.
+		await safely('obsidian settings', async () => {
 		updateVaultList();
-		await initializeReadingSettings();
-		initializeConnectionSettings();
-		initializeSyncSettings();
-		initializeFinishSettings();
 		initializeShowMoreActionsToggle();
 		initializeBetaFeaturesToggle();
 		initializeLegacyModeToggle();
 		initializeSilentOpenToggle();
 		initializeVaultInput();
 		initializeOpenBehaviorDropdown();
-		initializeKeyboardShortcuts();
 		initializeToggles();
 		setShortcutInstructions();
 		initializeAutoSave();
@@ -268,6 +298,7 @@ export function initializeGeneralSettings(): void {
 		if (feedbackCloseBtn) {
 			feedbackCloseBtn.addEventListener('click', () => hideModal(feedbackModal));
 		}
+		});
 	});
 }
 
@@ -351,20 +382,22 @@ async function initializeKeyboardShortcuts(): Promise<void> {
 		chrome: 'chrome://extensions/shortcuts',
 		brave: 'brave://extensions/shortcuts',
 		edge: 'edge://extensions/shortcuts',
-		firefox: 'about:addons',
 	};
 	const shortcutsUrl = shortcutPages[browserName];
 	if (changeBtn && hint) {
 		if (shortcutsUrl) {
-			const label = browserName === 'chrome' ? 'Chrome' : browserName === 'brave' ? 'Brave' : browserName === 'edge' ? 'Edge' : 'Firefox';
+			const label = browserName === 'chrome' ? 'Chrome' : browserName === 'brave' ? 'Brave' : 'Edge';
 			changeBtn.textContent = `Change in ${label}`;
 			hint.textContent = `Opens ${shortcutsUrl}, where ${label} keeps every extension's keys.`;
 			changeBtn.addEventListener('click', () => {
 				void browser.tabs.create({ url: shortcutsUrl });
 			});
 		} else {
+			// Firefox cannot open about:addons from an extension page.
 			changeBtn.hidden = true;
-			hint.textContent = getMessage('shortcutInstructionsDefault');
+			hint.textContent = browserName === 'firefox'
+				? 'Open about:addons in Firefox, click the gear, then choose Manage Extension Shortcuts.'
+				: getMessage('shortcutInstructionsDefault');
 		}
 	}
 

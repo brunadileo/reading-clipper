@@ -48,43 +48,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 	document.querySelector(`#sidebar li[data-section="${targetSection}"]`)?.classList.add('active');
 	document.querySelector(`#sidebar li[data-section="${targetSection}"] button`)?.setAttribute('aria-current', 'page');
 
+	// Obsidian-only setup is logged and skipped when it fails, so it can never
+	// replace the LazyReader groups with the error block below.
+	async function attempt(name: string, fn: () => unknown): Promise<void> {
+		try {
+			await fn();
+		} catch (error) {
+			console.error(`Settings: ${name} failed, continuing`, error);
+		}
+	}
+
 	async function initializeSettings(): Promise<void> {
 		try {
-			await translatePage();
+			await attempt('translate page', translatePage);
 
-			await initializeGeneralSettings();
-			await initializeReaderSettings();
-			
-			// Initialize interpreter settings with error handling
-			try {
-				await initializeInterpreterSettings();
-			} catch (error) {
-				console.error('Error initializing interpreter settings, continuing with defaults:', error);
-			}
-			
-			// Load templates with error handling
-			let loadedTemplates;
-			try {
-				loadedTemplates = await loadTemplates();
-				updateTemplateList(loadedTemplates);
-			} catch (error) {
-				console.error('Error loading templates:', error);
-				// Continue with empty template list
-				updateTemplateList([]);
-			}
-			initializeTemplateListeners();
-			await handleUrlParameters();
-			initializeSidebar();
-			initializeAutoSave();
-			initializeMenu('more-actions-btn', 'template-actions-menu');
+			await attempt('general settings', initializeGeneralSettings);
+			await attempt('reader settings', initializeReaderSettings);
+			await attempt('interpreter settings', initializeInterpreterSettings);
 
-			createIcons({ icons });
+			await attempt('templates', async () => {
+				updateTemplateList(await loadTemplates());
+			});
+			await attempt('template buttons', initializeTemplateListeners);
+			await attempt('section from url', handleUrlParameters);
+			await attempt('sidebar', initializeSidebar);
+			await attempt('auto save', initializeAutoSave);
+			await attempt('menu', () => initializeMenu('more-actions-btn', 'template-actions-menu'));
+
+			await attempt('icons', () => createIcons({ icons }));
 
 			// Initialize language selector
-			const languageSelect = document.getElementById('language-select') as HTMLSelectElement;
-			if (languageSelect) {
-				await initializeLanguageSelector(languageSelect);
-			}
+			await attempt('language selector', async () => {
+				const languageSelect = document.getElementById('language-select') as HTMLSelectElement;
+				if (languageSelect) {
+					await initializeLanguageSelector(languageSelect);
+				}
+			});
 		} catch (error) {
 			console.error('Error during settings initialization:', error);
 			// Show a basic error message but continue with minimal functionality

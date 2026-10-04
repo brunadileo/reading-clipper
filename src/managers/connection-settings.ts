@@ -4,6 +4,7 @@
 // advanced server address. The two inputs themselves are bound in
 // general-settings.ts (initializeReadingSettings).
 import browser from '../utils/browser-polyfill';
+import { setText } from '../utils/set-text';
 import { DEFAULT_READING_CAPTURE_URL, loadReadingSettings, saveReadingSettings } from '../utils/storage-utils';
 
 const LAZYREADER_URL = 'https://lazyreader.app';
@@ -33,32 +34,47 @@ export function describeConnection(token: string): ConnectionView {
 	};
 }
 
+/** Sets an input's value and remembers it as the last value this page wrote itself. */
+export function setFieldValue(input: HTMLInputElement, value: string): void {
+	input.value = value;
+	input.dataset.lrWritten = value;
+}
+
+// An input is only refreshed from storage when it is not focused and still
+// holds what this page last wrote, so an edit waiting to be saved survives.
+function refreshField(input: HTMLInputElement | null, value: string): void {
+	if (!input || document.activeElement === input) return;
+	if (input.value !== (input.dataset.lrWritten ?? '')) return;
+	if (input.value !== value) setFieldValue(input, value);
+}
+
 async function refresh(): Promise<void> {
-	const { token } = await loadReadingSettings();
+	const { token, captureUrl } = await loadReadingSettings();
 	const view = describeConnection(token);
 	const card = document.getElementById('connection-status');
 	const pip = document.getElementById('connection-pip');
-	const title = document.getElementById('connection-state');
-	const hint = document.getElementById('connection-hint');
 	const action = document.getElementById('connection-action');
 	const dot = document.getElementById('nav-connection-dot');
+	const dotText = document.getElementById('nav-connection-sr');
 	card?.setAttribute('data-state', view.connected ? 'connected' : 'disconnected');
 	if (pip) {
 		pip.classList.toggle('ok', view.connected);
 		pip.classList.toggle('warn', !view.connected);
 	}
-	if (title) title.textContent = view.title;
-	if (hint) hint.textContent = view.hint;
+	setText(document.getElementById('connection-state'), view.title);
+	setText(document.getElementById('connection-hint'), view.hint);
 	if (action) {
-		action.textContent = view.action;
+		setText(action, view.action);
 		action.classList.toggle('primary', !view.connected);
+		action.hidden = false;
 	}
 	if (dot) dot.hidden = view.connected;
+	if (dotText) dotText.hidden = view.connected;
 
 	// A token that arrives while this page is open (sign-in finished) shows up
-	// in the field too, unless the user is typing in it.
-	const tokenInput = document.getElementById('reading-token-input') as HTMLInputElement | null;
-	if (tokenInput && document.activeElement !== tokenInput) tokenInput.value = token;
+	// in the field too.
+	refreshField(document.getElementById('reading-token-input') as HTMLInputElement | null, token);
+	refreshField(document.getElementById('reading-capture-url-input') as HTMLInputElement | null, captureUrl);
 }
 
 export function initializeConnectionSettings(): void {
@@ -70,7 +86,7 @@ export function initializeConnectionSettings(): void {
 	const reset = document.getElementById('reading-reset-default');
 	reset?.addEventListener('click', async () => {
 		const urlInput = document.getElementById('reading-capture-url-input') as HTMLInputElement | null;
-		if (urlInput) urlInput.value = DEFAULT_READING_CAPTURE_URL;
+		if (urlInput) setFieldValue(urlInput, DEFAULT_READING_CAPTURE_URL);
 		await saveReadingSettings({ captureUrl: DEFAULT_READING_CAPTURE_URL });
 	});
 

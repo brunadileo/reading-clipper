@@ -224,7 +224,12 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 
 /** Pure: the status line for the settings page. */
 export function describeFinishStatus(s: FinishState, hasToken: boolean, now: number): string {
-	if (!hasToken) return 'Save your LazyReader token above to turn this on.';
+	const line = finishStatusLine(s, hasToken, now);
+	return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+function finishStatusLine(s: FinishState, hasToken: boolean, now: number): string {
+	if (!hasToken) return 'Connect to LazyReader first (see Connection).';
 	if (!isEnabled(s, hasToken)) return 'Off';
 	if (s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < STALE_LOCK_MS) return 'Finishing...';
 	const waiting = s.waitingCount === null ? '' : `${s.waitingCount} waiting, `;

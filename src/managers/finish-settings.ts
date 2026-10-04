@@ -2,6 +2,7 @@
 // The Finish now button is gone: Sync now runs it (choice 26).
 import browser from '../utils/browser-polyfill';
 import { describeFinishStatus, isEnabled, loadFinishState } from '../utils/waiting-finisher';
+import { setText } from '../utils/set-text';
 import { loadReadingSettings } from '../utils/storage-utils';
 
 const store = {
@@ -24,7 +25,7 @@ async function refresh(): Promise<void> {
 		toggle.checked = on;
 		toggle.closest('.checkbox-container')?.classList.toggle('is-enabled', on);
 	}
-	if (status) status.textContent = describeFinishStatus(state, hasToken, Date.now());
+	setText(status, describeFinishStatus(state, hasToken, Date.now()));
 	const list = document.getElementById('finish-open-list');
 	if (list) list.hidden = !on;
 }

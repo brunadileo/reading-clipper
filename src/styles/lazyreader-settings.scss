@@ -1,7 +1,7 @@
 // READ-197: the LazyReader look for settings.html. Everything is scoped to
 // #settings-page / #lr-settings so the popup, reader and side panel are not
-// touched. Tokens are LazyReader's "Calm" look (lazyreader/web/src/index.css),
-// light by default and dark when the system asks for it. The Obsidian pages
+// touched. Tokens are LazyReader's "Calm" light look (lazyreader/web/src/index.css).
+// This page is light only, also when the system is dark (Bruna's rule). The Obsidian pages
 // stay in the DOM with the hidden attribute.
 //
 // Fonts ship inside the extension (src/fonts, SIL OFL, licences alongside).
@@ -44,28 +44,11 @@
 	--lr-r: 0.5rem;
 	--lr-display: 'Literata', ui-serif, Georgia, serif;
 	--lr-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-	color-scheme: light;
 	background-color: var(--lr-bg);
-}
-
-@media (prefers-color-scheme: dark) {
-	#settings-page {
-		--lr-bg: hsl(216 25.5% 7.8%);
-		--lr-fg: hsl(211 23.9% 92.5%);
-		--lr-card: hsl(216 21.6% 11%);
-		--lr-muted: hsl(216 16.8% 14.7%);
-		--lr-mfg: hsl(214 8.9% 67.6%);
-		--lr-border: hsl(216 12.7% 20.6%);
-		--lr-input: hsl(216 7.4% 39.7%);
-		--lr-accent: hsl(212 76.4% 74.7%);
-		--lr-on-accent: hsl(216 25.5% 7.8%);
-		--lr-accent-l: hsl(214 43.2% 19.3%);
-		--lr-accent-fg: hsl(212 82.7% 84.1%);
-		--lr-green: hsl(149 40.7% 61.5%);
-		--lr-amber: hsl(33 81.5% 66.2%);
-		--lr-red: hsl(4 79.5% 70.3%);
-		color-scheme: dark;
-	}
+	// Native controls and scrollbars stay light even when macOS is dark. The
+	// Obsidian dark variables only reach hidden elements; every visible colour
+	// here comes from the --lr tokens.
+	color-scheme: light only;
 }
 
 #settings-page {
@@ -124,6 +107,18 @@
 		box-shadow: none;
 	}
 
+	.lr-sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	.lr-head {
 		grid-column: 1 / -1;
 		display: flex;
@@ -180,6 +175,7 @@
 			border-radius: 6px;
 			background: none;
 			box-shadow: none;
+			justify-content: flex-start;
 			color: var(--lr-mfg);
 			text-align: left;
 			font-weight: 400;
@@ -197,8 +193,14 @@
 		}
 
 		.dot {
+			display: block;
+			flex: none;
+			align-self: center;
 			width: 7px;
+			min-width: 7px;
 			height: 7px;
+			min-height: 7px;
+			padding: 0;
 			border-radius: 50%;
 			margin-left: auto;
 			background: var(--lr-amber);
