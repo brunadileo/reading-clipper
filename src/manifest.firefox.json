@@ -3,7 +3,7 @@
 	"default_locale": "en",
 	"name": "LazyReader Clipper",
 	"homepage_url": "https://reader.lazyailabs.com",
-	"version": "1.7.1",
+	"version": "1.7.2",
 	"description": "Save the page you're on into LazyReader, full article text included. Reads the page in your own logged-in browser, so pages LazyReader can't fetch on its own still arrive with their text.",
 	"permissions": [
 		"activeTab",

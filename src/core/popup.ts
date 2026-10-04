@@ -1387,7 +1387,8 @@ async function handleClipObsidian(): Promise<void> {
 			lane: selectedLane,
 			title: noteName,
 			siteName: currentVariables['{{site}}'] || '',
-			text: noteContentField.value
+			text: noteContentField.value,
+			via: 'chrome-clipper',
 		});
 
 		const readingSettings = await loadReadingSettings();

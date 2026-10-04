@@ -13,7 +13,12 @@ export interface ReadingCaptureBody {
 	// READ-37/39: where an automatic save came from. The server keeps only
 	// 'substack' and 'instagram'.
 	source?: 'substack' | 'instagram';
+	// READ-200: the channel, shown on the item page. The server keeps only the
+	// four values it allows a token client to name and stores 'token' otherwise.
+	via?: ReadingVia;
 }
+
+export type ReadingVia = 'chrome-clipper' | 'substack-saved' | 'instagram-saved';
 
 export interface BuildReadingCaptureBodyParams {
 	url: string;
@@ -22,6 +27,7 @@ export interface BuildReadingCaptureBodyParams {
 	siteName: string;
 	text: string;
 	source?: 'substack' | 'instagram';
+	via?: ReadingVia;
 }
 
 // The new home (READ-18) stores full text as a file and caps it at 96,000
@@ -74,6 +80,7 @@ export function buildReadingCaptureBody(params: BuildReadingCaptureBodyParams): 
 	};
 
 	if (params.source) body.source = params.source;
+	if (params.via) body.via = params.via;
 
 	// The caller passes the note body, which never holds frontmatter, so the
 	// text is sent as-is. An article that opens with a "---" rule stays whole.

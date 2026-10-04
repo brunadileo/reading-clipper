@@ -45,7 +45,9 @@ function makeDeps(service: SyncService): SyncDeps {
 				title: post.title,
 				siteName: post.siteName,
 				text: text ?? '',
+				// source stays for a server that predates `via`.
 				source: service,
+				via: `${service}-saved`,
 			});
 			return postCapture(body, settings.captureUrl, settings.token);
 		},

@@ -116,6 +116,20 @@ describe('source and postCapture', () => {
 		expect(buildReadingCaptureBody({ ...base, source: 'substack' }).source).toBe('substack');
 	});
 
+	it('adds via only when given, and popup and sync bodies carry the right channel (READ-200)', () => {
+		const base = { url: 'https://a.test/p/x', lane: 'read-now', title: 'T', siteName: 'S', text: 'body' };
+		expect(buildReadingCaptureBody(base)).not.toHaveProperty('via');
+		const popup = buildReadingCaptureBody({ ...base, via: 'chrome-clipper' });
+		expect(popup.via).toBe('chrome-clipper');
+		expect(popup).not.toHaveProperty('source');
+		// The sync bodies keep source for a server that predates via.
+		for (const service of ['substack', 'instagram'] as const) {
+			const sync = buildReadingCaptureBody({ ...base, source: service, via: `${service}-saved` });
+			expect(sync.source).toBe(service);
+			expect(sync.via).toBe(`${service}-saved`);
+		}
+	});
+
 	it('posts with the token header and returns status and data', async () => {
 		let seen: any;
 		const fetchFn = (async (url: string, init: any) => {
