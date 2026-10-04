@@ -67,15 +67,13 @@ const finishLine = (r: Awaited<ReturnType<typeof runFinish>>) =>
 		? `skipped (${r.skipped})`
 		: `${r.finished} finished, ${r.membersOnly} members only, ${r.unreadable} could not be opened${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 
-/** The jobs in their fixed order. Medium goes after Instagram later. */
+/**
+ * The jobs in their fixed order. Finish runs last so the paid previews the
+ * services just parked as "Waiting for full text" are picked up in the same
+ * run (JOB_PAUSE_MS covers the server parking them). Medium goes before it later.
+ */
 function buildJobs(manual: boolean): SyncJob[] {
 	return [
-		{
-			id: 'finish',
-			name: 'Finish waiting articles',
-			enabled: async () => finishSupported() && !!(await loadReadingSettings()).token && isEnabled(await loadFinishState(store), true),
-			run: async () => finishLine(await runFinish(manual ? 'now' : 'alarm')),
-		},
 		{
 			id: 'substack',
 			name: 'Substack',
@@ -99,6 +97,12 @@ function buildJobs(manual: boolean): SyncJob[] {
 				if (r.stopped) return r.message ?? `stopped (${r.stopped})`;
 				return `${r.sent} saved`;
 			},
+		},
+		{
+			id: 'finish',
+			name: 'Finish waiting articles',
+			enabled: async () => finishSupported() && !!(await loadReadingSettings()).token && isEnabled(await loadFinishState(store), true),
+			run: async () => finishLine(await runFinish(manual ? 'now' : 'alarm')),
 		},
 	];
 }
@@ -128,7 +132,7 @@ export async function runAll(trigger: SequenceTrigger) {
 	return result;
 }
 
-/** Load older (one service) or the web's Finish now (job 1 only), under the same lock. */
+/** Load older (one service) or the web's Finish now (the finish job only), under the same lock. */
 export function runOne(id: 'finish' | 'substack' | 'instagram', trigger: 'older' | 'finish-now') {
 	const job = buildJobs(false).find((j) => j.id === id)!;
 	if (trigger === 'finish-now') {
@@ -183,7 +187,7 @@ export function initSyncRunner(): void {
 		if (req.action === 'syncNow') {
 			return fromSettings ? reply(runAll('now')) : undefined;
 		}
-		// The lazyreader.app relay is allowed here and runs job 1 only.
+		// The lazyreader.app relay is allowed here and runs the finish job only.
 		if (req.action === 'finishNow') {
 			return trustedSender(sender) ? reply(runOne('finish', 'finish-now')) : undefined;
 		}
