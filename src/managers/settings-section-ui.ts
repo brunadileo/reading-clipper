@@ -1,16 +1,21 @@
 import { updateUrl } from '../utils/routing';
-import { generalSettings } from '../utils/storage-utils';
 import { updatePromptContextVisibility } from './interpreter-settings';
-import { initializePropertyTypesManager } from './property-types-manager';
+import { resolveSection, type LazyReaderSection } from '../utils/settings-sections';
 
-export type SettingsSection = 'general' | 'properties' | 'highlighter' | 'interpreter' | 'reader' | 'templates';
+// The four visible groups plus the hidden Obsidian names. Any name that is not
+// one of the four shows Connection (see resolveSection).
+export type SettingsSection = LazyReaderSection | 'general' | 'properties' | 'highlighter' | 'interpreter' | 'reader' | 'templates';
 
-export function showSettingsSection(section: SettingsSection, templateId?: string): void {
+export function showSettingsSection(requested: SettingsSection, templateId?: string): void {
+	const section = resolveSection(requested);
 	const sections = document.querySelectorAll('.settings-section');
 	const sidebarItems = document.querySelectorAll('#sidebar li[data-section]');
 
 	sections.forEach(s => s.classList.remove('active'));
-	sidebarItems.forEach(item => item.classList.remove('active'));
+	sidebarItems.forEach(item => {
+		item.classList.remove('active');
+		item.querySelector('button')?.removeAttribute('aria-current');
+	});
 
 	const selectedSection = document.getElementById(`${section}-section`);
 	const selectedSidebarItem = document.querySelector(`#sidebar li[data-section="${section}"]`);
@@ -20,20 +25,10 @@ export function showSettingsSection(section: SettingsSection, templateId?: strin
 	}
 	if (selectedSidebarItem) {
 		selectedSidebarItem.classList.add('active');
+		selectedSidebarItem.querySelector('button')?.setAttribute('aria-current', 'page');
 	}
 
-	updateUrl(section, templateId);
-
-	if (section === 'properties') {
-		initializePropertyTypesManager();
-	}
-
-	if (section === 'templates') {
-		const templateEditor = document.getElementById('template-editor');
-		if (templateEditor) {
-			templateEditor.style.display = 'block';
-		}
-	}
+	updateUrl(section);
 
 	updatePromptContextVisibility();
 }
@@ -63,7 +58,7 @@ export function initializeSidebar(): void {
 
 	if (sidebarTitle) {
 		sidebarTitle.addEventListener('click', () => {
-			showSettingsSection('general');
+			showSettingsSection('connection');
 		});
 	}
 
@@ -72,12 +67,8 @@ export function initializeSidebar(): void {
 			const target = event.target as HTMLElement;
 			const li = target.closest('li[data-section]') as HTMLElement | null;
 			const section = li?.dataset.section;
-			if (section === 'general'
-				|| section === 'properties'
-				|| section === 'highlighter'
-				|| section === 'interpreter'
-				|| section === 'reader') {
-				showSettingsSection(section as 'general' | 'properties' | 'highlighter' | 'interpreter' | 'reader');
+			if (section) {
+				showSettingsSection(resolveSection(section));
 			}
 			if (settingsContainer) {
 				settingsContainer.classList.remove('sidebar-open');

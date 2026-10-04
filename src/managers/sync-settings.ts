@@ -46,7 +46,10 @@ async function refresh(service: SyncService): Promise<void> {
 		toggle.closest('.checkbox-container')?.classList.toggle('is-enabled', state.enabled);
 	}
 	if (status) status.textContent = describeSyncStatus(service, state, Date.now());
-	if (older) older.disabled = !state.enabled || state.running || state.olderExhausted;
+	if (older) {
+		older.disabled = !state.enabled || state.running || state.olderExhausted;
+		older.hidden = !state.enabled;
+	}
 }
 
 function setupService(service: SyncService): void {
@@ -110,9 +113,18 @@ async function refreshSchedule(): Promise<void> {
 	const select = document.getElementById('sync-frequency') as HTMLSelectElement | null;
 	const status = document.getElementById('sync-schedule-status');
 	const now = document.getElementById('sync-all-now') as HTMLButtonElement | null;
+	const pip = document.getElementById('sync-pip');
+	const freqHint = document.getElementById('sync-frequency-hint');
+	const running = isRunning(state, Date.now());
 	if (select && document.activeElement !== select) select.value = state.frequency;
 	if (status) status.textContent = describeScheduleStatus(state, Date.now());
-	if (now) now.disabled = isRunning(state, Date.now());
+	if (now) now.disabled = running;
+	if (pip) pip.classList.toggle('run', running);
+	if (freqHint) {
+		freqHint.textContent = state.frequency === 'manual'
+			? 'Runs only when you press Sync now.'
+			: 'Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.';
+	}
 }
 
 function setupSchedule(): void {

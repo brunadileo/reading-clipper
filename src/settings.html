@@ -1,30 +1,150 @@
 <!DOCTYPE html>
-<html lang="en" id="settings-page" style="height: 100%; overflow: hidden;">
+<html lang="en" id="settings-page">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 	<title>LazyReader Clipper</title>
 	<link rel="stylesheet" href="style.css">
 </head>
-<body style="height: 100%; overflow: hidden;">
+<body>
 		<div id="settings">
-			
-			<div id="settings-container">
-				<div id="sidebar" class="sidebar">
+
+			<div id="lr-settings">
+				<header class="lr-head">
+					<h1>Settings</h1>
+					<span class="brand">LazyReader Clipper</span>
+				</header>
+				<nav id="sidebar" class="lr-nav" aria-label="Settings sections">
+					<ul>
+						<li data-section="connection"><button type="button">Connection<span class="dot" id="nav-connection-dot" hidden></span></button></li>
+						<li data-section="sync"><button type="button">Sync</button></li>
+						<li data-section="shortcuts"><button type="button">Shortcuts</button></li>
+						<li data-section="about"><button type="button">About</button></li>
+					</ul>
+				</nav>
+				<div id="lr-content" class="lr-pane-wrap">
+
+					<section id="connection-section" class="settings-section lr-pane">
+						<h2 class="lr-h2">Connection</h2>
+						<p class="lr-sub">Where your saves go. The clipper uses your LazyReader sign-in in this Chrome, so there is nothing to paste.</p>
+						<div class="lr-status" id="connection-status" role="status" data-state="disconnected">
+							<span class="lr-pip warn" id="connection-pip"></span>
+							<div class="main">
+								<div class="t" id="connection-state">Not connected</div>
+								<div class="hint" id="connection-hint">Sign in to lazyreader.app in this Chrome. This page connects by itself once you are in.</div>
+							</div>
+							<button type="button" class="lr-btn primary" id="connection-action">Sign in</button>
+						</div>
+						<details class="lr-details" id="connection-advanced">
+							<summary>Advanced: server address and token</summary>
+							<p class="hint lr-advanced-note">Only change these if LazyReader support asks you to.</p>
+							<div class="lr-field">
+								<label for="reading-capture-url-input">Server address</label>
+								<input type="text" id="reading-capture-url-input" autocomplete="off" spellcheck="false" />
+							</div>
+							<div class="lr-field">
+								<label for="reading-token-input">Token</label>
+								<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" placeholder="None yet" />
+								<span class="hint">Filled in by itself from your sign-in.</span>
+							</div>
+							<button type="button" class="lr-btn" id="reading-reset-default">Reset to default</button>
+						</details>
+					</section>
+
+					<section id="sync-section" class="settings-section lr-pane">
+						<h2 class="lr-h2">Sync</h2>
+						<p class="lr-sub">Brings posts you saved on other sites into LazyReader, using your own logins in this Chrome. Your logins never reach LazyReader.</p>
+						<div class="lr-sched sync-service" data-service="schedule">
+							<div class="lr-field">
+								<label for="sync-frequency">How often</label>
+								<select class="lr-select" id="sync-frequency">
+									<option value="hourly">Every hour</option>
+									<option value="every3h">Every 3 hours</option>
+									<option value="twiceDaily" selected>Twice a day</option>
+									<option value="daily">Once a day</option>
+									<option value="manual">Only when I press Sync now</option>
+								</select>
+							</div>
+							<button class="lr-btn" id="sync-all-now" type="button">Sync now</button>
+						</div>
+						<p class="hint lr-tight" id="sync-frequency-hint">Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.</p>
+						<div class="lr-status">
+							<span class="lr-pip ok" id="sync-pip"></span>
+							<div class="main"><div class="t" id="sync-schedule-status" role="status">No sync yet.</div></div>
+						</div>
+						<h3 class="lr-h3">Runs in this order</h3>
+						<p class="hint lr-tight">One after the other, never at the same time.</p>
+						<div class="lr-group">
+							<div class="lr-row sync-service" data-service="substack">
+								<span class="num">1</span>
+								<div class="main">
+									<div class="t">Substack <span class="lr-tag">Experimental</span></div>
+									<div class="d">Your newest saves, every sync. The first run takes your newest 100.</div>
+									<div class="d" id="sync-substack-status" role="status">Off</div>
+									<button class="lr-btn link" id="sync-substack-older" type="button">Load 100 older saves</button>
+								</div>
+								<div class="checkbox-container"><input type="checkbox" id="sync-substack-toggle" role="switch" aria-label="Substack sync" /></div>
+							</div>
+							<div class="lr-row sync-service" data-service="instagram">
+								<span class="num">2</span>
+								<div class="main">
+									<div class="t">Instagram <span class="lr-tag">Experimental</span></div>
+									<div class="d">Saved posts, at most once an hour. Instagram can restrict accounts that use automated tools, so turn it on at your own risk. Needs your SociaVault key in LazyReader Settings.</div>
+									<div class="d" id="sync-instagram-status" role="status">Off</div>
+									<button class="lr-btn link" id="sync-instagram-older" type="button">Load 100 older saves</button>
+								</div>
+								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
+							</div>
+							<div class="lr-row sync-service" data-service="finish">
+								<span class="num">3</span>
+								<div class="main">
+									<div class="t">Finish waiting articles</div>
+									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what steps 1 and 2 just saved.</div>
+									<div class="d" id="finish-status" role="status">Off</div>
+									<a class="lr-btn link" id="finish-open-list" href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
+								</div>
+								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
+							</div>
+						</div>
+						<p class="hint">These sites have no official way to do this, so a sync can stop working without notice.</p>
+					</section>
+
+					<section id="shortcuts-section" class="settings-section lr-pane">
+						<h2 class="lr-h2">Shortcuts</h2>
+						<p class="lr-sub">Keyboard shortcuts for the clipper.</p>
+						<div class="lr-group" id="keyboard-shortcuts-list"></div>
+						<button type="button" class="lr-btn" id="shortcuts-change">Change in Chrome</button>
+						<p class="hint" id="shortcuts-hint">Opens chrome://extensions/shortcuts, where Chrome keeps every extension's keys.</p>
+					</section>
+
+					<section id="about-section" class="settings-section lr-pane">
+						<h2 class="lr-h2">About</h2>
+						<p class="lr-sub">LazyReader Clipper, version <span id="version-number"></span>.</p>
+						<div class="lr-group">
+							<a class="lr-row lr-link" href="https://claude.ai/artifact/4bmMro9byWYAhX9HdmYwTM" target="_blank" rel="noopener"><div class="main"><div class="t">How the clipper works</div><div class="d">The setup guide, Chrome clipper tab.</div></div><span class="v">›</span></a>
+							<a class="lr-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">LazyReader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
+						</div>
+						<p class="hint">Built on the Obsidian Web Clipper (MIT licence).</p>
+					</section>
+
+				</div>
+			</div>
+			<div id="settings-container" hidden>
+				<div id="sidebar-obsidian" class="sidebar">
 					<div id="settings-sidebar-title">
 						<svg xmlns="http://www.w3.org/2000/svg" class="logo" viewBox="0 0 256 256"><rect x="20" y="20" width="216" height="216" rx="40"/><text x="128" y="188" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="160" fill="var(--background-primary)">R</text></svg>
 						<span data-i18n="settings">Settings</span>
 					</div>
 					<ul>
-						<li data-section="general"><div class="nav-item-icon"><i data-lucide="paperclip"></i></div><span data-i18n="general">General</span></li>
-						<li data-section="reader"><div class="nav-item-icon"><i data-lucide="book-open"></i></div><span data-i18n="reader">Reader</span></li>
-						<li data-section="highlighter"><div class="nav-item-icon"><i data-lucide="highlighter"></i></div><span data-i18n="highlighter">Highlighter</span></li>
-						<li data-section="interpreter"><div class="nav-item-icon"><i data-lucide="quote"></i></div><span data-i18n="interpreter">Interpreter</span></li>
-						<li data-section="properties"><div class="nav-item-icon"><i data-lucide="archive"></i></div><span data-i18n="properties">Properties</span></li>
-						<li class="sidebar-heading" data-i18n="templatesHeading">Templates</li>
+						<li data-section="general" hidden><div class="nav-item-icon"><i data-lucide="paperclip"></i></div><span data-i18n="general">General</span></li>
+						<li data-section="reader" hidden><div class="nav-item-icon"><i data-lucide="book-open"></i></div><span data-i18n="reader">Reader</span></li>
+						<li data-section="highlighter" hidden><div class="nav-item-icon"><i data-lucide="highlighter"></i></div><span data-i18n="highlighter">Highlighter</span></li>
+						<li data-section="interpreter" hidden><div class="nav-item-icon"><i data-lucide="quote"></i></div><span data-i18n="interpreter">Interpreter</span></li>
+						<li data-section="properties" hidden><div class="nav-item-icon"><i data-lucide="archive"></i></div><span data-i18n="properties">Properties</span></li>
+						<li class="sidebar-heading" data-i18n="templatesHeading" hidden>Templates</li>
 					</ul>
-					<button type="button" id="new-template-btn" class="mod-cta" data-i18n="newTemplate">New&nbsp;template</button>
-					<ul id="template-list"></ul>
+					<button type="button" id="new-template-btn" class="mod-cta" hidden data-i18n="newTemplate">New&nbsp;template</button>
+					<ul id="template-list" hidden></ul>
 					
 				</div>
 				
@@ -38,7 +158,7 @@
 							<span class="hamburger-icon"></span>
 						</button>
 					</div>
-					<div id="general-section" class="settings-section">
+					<div id="general-section" class="settings-section" hidden>
 						<div class="settings-section-header">
 							<h2 data-i18n="generalSettings">General settings</h2>
 						</div>
@@ -102,7 +222,7 @@
 									<div class="setting-item mod-horizontal">
 										<div class="setting-item-info">
 											<label for="version">
-													<span data-i18n="version">Version</span> <span id="version-number" class="version-tag"></span>
+													<span data-i18n="version">Version</span> <span class="version-tag"></span>
 											</label>
 											<div class="setting-item-description">
 												<span id="using-latest-version" data-i18n="usingLatestVersion">
@@ -129,133 +249,12 @@
 									</div>
 								</div>
 							</div>
-							<div class="setting-group" id="reading-settings-group">
-								<div class="setting-item setting-item-heading"><h3 data-i18n="reading">LazyReader</h3></div>
-								<div class="setting-items">
-								<div class="setting-item-description" data-i18n="readingSettingsDescription">Where clips are sent. The token comes from LazyReader&#39;s own Settings page.</div>
-								<div class="setting-item mod-horizontal">
-									<div class="setting-item-info">
-										<label for="reading-capture-url-input" data-i18n="readingCaptureUrl">Capture URL</label>
-									</div>
-									<div class="setting-item-control">
-										<input type="text" id="reading-capture-url-input" autocomplete="off" spellcheck="false" />
-									</div>
-								</div>
-								<div class="setting-item mod-horizontal">
-									<div class="setting-item-info">
-										<label for="reading-token-input" data-i18n="readingToken">Token</label>
-									</div>
-									<div class="setting-item-control">
-										<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" />
-									</div>
-								</div>
-								</div>
-							</div>
-							<div class="setting-group" id="sync-settings-group">
-								<div class="setting-item setting-item-heading"><h3>Sync (experimental)</h3></div>
-								<div class="setting-items">
-								<div class="setting-item-description">Bring posts you saved on other sites into LazyReader. Each sync reads your own saved list in this browser, with your own login. Your login never reaches LazyReader. These sites have no official way to do this, so a sync can stop working without notice. Off by default.</div>
-								<div class="sync-service" data-service="schedule">
-									<div class="setting-item mod-horizontal">
-										<div class="setting-item-info">
-											<label for="sync-frequency">Sync with LazyReader</label>
-											<div class="setting-item-description">One schedule for everything below, while Chrome is open. The jobs run one after the other: finish waiting articles, then Substack, then Instagram. Never more often than once an hour. If Chrome was closed when a sync was due, it runs once when you are back.</div>
-										</div>
-										<div class="setting-item-control">
-											<select class="dropdown" id="sync-frequency">
-												<option value="hourly">Every hour</option>
-												<option value="every3h">Every 3 hours</option>
-												<option value="twiceDaily" selected>Twice a day</option>
-												<option value="daily">Once a day</option>
-												<option value="manual">Only when I press Sync now</option>
-											</select>
-										</div>
-									</div>
-									<div class="setting-item mod-horizontal">
-										<div class="setting-item-info">
-											<div class="setting-item-description" id="sync-schedule-status" role="status">No sync yet.</div>
-										</div>
-										<div class="setting-item-control">
-											<button class="btn" id="sync-all-now" type="button">Sync now</button>
-										</div>
-									</div>
-								</div>
-								<div class="sync-service" data-service="substack">
-									<div class="setting-item mod-horizontal mod-toggle">
-										<div class="setting-item-info">
-											<label for="sync-substack-toggle">Substack <span class="sync-badge">Experimental</span></label>
-											<div class="setting-item-description">Brings in your Substack saves on the sync schedule. The first run takes your newest 100.</div>
-										</div>
-										<div class="setting-item-control">
-											<div class="checkbox-container">
-												<input type="checkbox" id="sync-substack-toggle" />
-											</div>
-										</div>
-									</div>
-									<div class="setting-item mod-horizontal">
-										<div class="setting-item-info">
-											<div class="setting-item-description" id="sync-substack-status" role="status">Off</div>
-										</div>
-										<div class="setting-item-control">
-											<button class="btn" id="sync-substack-older" type="button">Load older (100)</button>
-										</div>
-									</div>
-								</div>
-								<div class="sync-service" data-service="instagram">
-									<div class="setting-item mod-horizontal mod-toggle">
-										<div class="setting-item-info">
-											<label for="sync-instagram-toggle">Instagram <span class="sync-badge">Experimental</span></label>
-											<div class="setting-item-description">Runs on the sync schedule, at most once an hour. Instagram can restrict accounts that use automated tools: you use this at your own risk. Needs your SociaVault key saved in LazyReader Settings.</div>
-										</div>
-										<div class="setting-item-control">
-											<div class="checkbox-container">
-												<input type="checkbox" id="sync-instagram-toggle" />
-											</div>
-										</div>
-									</div>
-									<div class="setting-item mod-horizontal">
-										<div class="setting-item-info">
-											<div class="setting-item-description" id="sync-instagram-status" role="status">Off</div>
-										</div>
-										<div class="setting-item-control">
-											<button class="btn" id="sync-instagram-older" type="button">Load older (100)</button>
-										</div>
-									</div>
-								</div>
-								<div class="sync-service" data-service="finish">
-									<div class="setting-item mod-horizontal mod-toggle">
-										<div class="setting-item-info">
-											<label for="finish-toggle">Finish waiting articles on this computer</label>
-											<div class="setting-item-description">Paywalled links saved from your phone wait for their full text. When Chrome is in use, this opens each waiting link with your own browser login, with nothing on screen, and sends only the article text to LazyReader. Your login never leaves this browser.</div>
-										</div>
-										<div class="setting-item-control">
-											<div class="checkbox-container">
-												<input type="checkbox" id="finish-toggle" />
-											</div>
-										</div>
-									</div>
-									<div class="setting-item mod-horizontal">
-										<div class="setting-item-info">
-											<div class="setting-item-description" id="finish-status" role="status">Off</div>
-										</div>
-									</div>
-								</div>
-								</div>
-							</div>
 							<div class="setting-group" id="vaults-settings-group" style="display: none;">
 								<div class="setting-item setting-item-heading"><h3 data-i18n="vaults">Vaults</h3></div>
 								<div class="setting-items">
 								<div class="setting-item-description" data-i18n="vaultsDescription">By default, clipped notes are saved to the currently open vault. You can add vaults here if you want the option to save to different vaults. Vault names must exactly match the name of the Obsidian vault. Press <strong>enter</strong> to add a&nbsp;vault.</div>
 								<input type="text" id="vault-input" data-i18n="addVaultPlaceholder" placeholder="Press enter to add a vault" autocomplete="off" spellcheck="false" />
 								<ul id="vault-list" class="setting-item-list"></ul>
-								</div>
-							</div>
-							<div class="setting-group" id="hotkeys-subsection">
-								<div class="setting-item setting-item-heading"><h3 data-i18n="hotkeys">Hotkeys</h3></div>
-								<div class="setting-items">
-								<div class="setting-item-description shortcut-instructions">
-								</div>
-								<div id="keyboard-shortcuts-list"></div>
 								</div>
 							</div>
 							<div class="setting-group">
@@ -365,7 +364,7 @@
 						</form>
 					</div>
 
-					<div id="highlighter-section" class="settings-section">
+					<div id="highlighter-section" class="settings-section" hidden>
 						<div class="settings-section-header">
 							<h2 data-i18n="highlighterSettings">Highlighter</h2>
 							<div class="settings-section-actions">
@@ -433,7 +432,7 @@
 						</form>
 					</div>
 
-					<div id="reader-section" class="settings-section">
+					<div id="reader-section" class="settings-section" hidden>
 						<div class="settings-section-header">
 							<h2 data-i18n="reader">Reader</h2>
 							<div class="settings-section-actions">
@@ -609,7 +608,7 @@
 						</form>
 					</div>
 
-					<div id="interpreter-section" class="settings-section">
+					<div id="interpreter-section" class="settings-section" hidden>
 						<div class="settings-section-header">
 							<h2 data-i18n="interpreter">Interpreter</h2>
 						</div>
@@ -688,7 +687,7 @@
 						</form>
 					</div>
 
-					<div id="properties-section" class="settings-section">
+					<div id="properties-section" class="settings-section" hidden>
 						<div class="settings-section-header">
 							<h2 data-i18n="propertiesSettings">Properties</h2>
 						</div>
@@ -743,7 +742,7 @@
 						</form>
 					</div>
 
-					<div id="templates-section" class="settings-section">
+					<div id="templates-section" class="settings-section" hidden>
 						<div class="settings-section-header">
 							<h2 id="template-editor-title" data-i18n="editTemplate">Edit template</h2>
 							<div class="settings-section-actions">

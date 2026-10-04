@@ -25,6 +25,8 @@ async function refresh(): Promise<void> {
 		toggle.closest('.checkbox-container')?.classList.toggle('is-enabled', on);
 	}
 	if (status) status.textContent = describeFinishStatus(state, hasToken, Date.now());
+	const list = document.getElementById('finish-open-list');
+	if (list) list.hidden = !on;
 }
 
 export function initializeFinishSettings(): void {

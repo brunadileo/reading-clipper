@@ -14,6 +14,8 @@ import { getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { debounce } from '../utils/debounce';
 import { initializeSyncSettings } from './sync-settings';
 import { initializeFinishSettings } from './finish-settings';
+import { initializeConnectionSettings } from './connection-settings';
+import { SHORTCUT_ORDER, SHORTCUT_ROWS, shortcutKeys } from '../utils/shortcut-display';
 import browser from '../utils/browser-polyfill';
 import { createUsageChart, aggregateUsageData, UsageMetric } from '../utils/charts';
 import { getClipHistory } from '../utils/storage-utils';
@@ -240,6 +242,7 @@ export function initializeGeneralSettings(): void {
 
 		updateVaultList();
 		await initializeReadingSettings();
+		initializeConnectionSettings();
 		initializeSyncSettings();
 		initializeFinishSettings();
 		initializeShowMoreActionsToggle();
@@ -328,32 +331,79 @@ async function initializeKeyboardShortcuts(): Promise<void> {
 	const shortcutsList = document.getElementById('keyboard-shortcuts-list');
 	if (!shortcutsList) return;
 
-	const browser = await detectBrowser();
+	const browserName = await detectBrowser();
+	const changeBtn = document.getElementById('shortcuts-change') as HTMLButtonElement | null;
+	const hint = document.getElementById('shortcuts-hint');
 
-	if (browser === 'mobile-safari') {
+	if (browserName === 'mobile-safari') {
 		// For Safari, display a message about keyboard shortcuts not being available
 		const messageItem = document.createElement('div');
-		messageItem.className = 'shortcut-item';
+		messageItem.className = 'lr-row';
 		messageItem.textContent = getMessage('shortcutInstructionsSafari');
 		shortcutsList.appendChild(messageItem);
-	} else {
-		// For other browsers, proceed with displaying the shortcuts
-		getCommands().then(commands => {
-			commands.forEach(command => {
-				const shortcutItem = createElementWithClass('div', 'shortcut-item');
-				
-				const descriptionSpan = document.createElement('span');
-				descriptionSpan.textContent = command.description;
-				shortcutItem.appendChild(descriptionSpan);
-
-				const hotkeySpan = createElementWithClass('span', 'setting-hotkey');
-				hotkeySpan.textContent = command.shortcut || getMessage('shortcutNotSet');
-				shortcutItem.appendChild(hotkeySpan);
-
-				shortcutsList.appendChild(shortcutItem);
-			});
-		});
+		if (changeBtn) changeBtn.hidden = true;
+		if (hint) hint.hidden = true;
+		return;
 	}
+
+	// Where each browser keeps its extension shortcuts.
+	const shortcutPages: Record<string, string> = {
+		chrome: 'chrome://extensions/shortcuts',
+		brave: 'brave://extensions/shortcuts',
+		edge: 'edge://extensions/shortcuts',
+		firefox: 'about:addons',
+	};
+	const shortcutsUrl = shortcutPages[browserName];
+	if (changeBtn && hint) {
+		if (shortcutsUrl) {
+			const label = browserName === 'chrome' ? 'Chrome' : browserName === 'brave' ? 'Brave' : browserName === 'edge' ? 'Edge' : 'Firefox';
+			changeBtn.textContent = `Change in ${label}`;
+			hint.textContent = `Opens ${shortcutsUrl}, where ${label} keeps every extension's keys.`;
+			changeBtn.addEventListener('click', () => {
+				void browser.tabs.create({ url: shortcutsUrl });
+			});
+		} else {
+			changeBtn.hidden = true;
+			hint.textContent = getMessage('shortcutInstructionsDefault');
+		}
+	}
+
+	// Only the open-clipper and quick-save commands are listed here. The other
+	// commands stay in the manifest.
+	getCommands().then(commands => {
+		SHORTCUT_ORDER.forEach(name => {
+			const command = commands.find(c => c.name === name);
+			if (!command) return;
+			const row = SHORTCUT_ROWS[name];
+
+			const item = createElementWithClass('div', 'lr-row shortcut-item');
+			const main = createElementWithClass('div', 'main');
+			const title = createElementWithClass('div', 't');
+			title.textContent = row.label;
+			main.appendChild(title);
+			if (row.description) {
+				const d = createElementWithClass('div', 'd');
+				d.textContent = row.description;
+				main.appendChild(d);
+			}
+			item.appendChild(main);
+
+			const keys = createElementWithClass('span', 'v setting-hotkey');
+			const parts = shortcutKeys(command.shortcut);
+			if (parts.length === 0) {
+				keys.textContent = 'Not set';
+			} else {
+				parts.forEach((key, i) => {
+					if (i > 0) keys.appendChild(document.createTextNode(' '));
+					const kbd = document.createElement('kbd');
+					kbd.textContent = key;
+					keys.appendChild(kbd);
+				});
+			}
+			item.appendChild(keys);
+			shortcutsList.appendChild(item);
+		});
+	});
 }
 
 function initializeBetaFeaturesToggle(): void {

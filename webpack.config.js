@@ -125,7 +125,10 @@ module.exports = (env, argv) => {
 						{
 							loader: 'css-loader',
 							options: {
-								sourceMap: !isProduction
+								sourceMap: !isProduction,
+								// fonts/ urls (settings page, READ-197) are copied as they are
+								// and resolve next to the css file in the output folder.
+								url: { filter: (url) => !url.startsWith('fonts/') }
 							}
 						},
 						{
@@ -153,6 +156,7 @@ module.exports = (env, argv) => {
 					{ from: "src/highlights.html", to: "highlights.html" },
 					{ from: "src/reader.html", to: "reader.html" },
 					{ from: "src/icons", to: "icons" },
+					{ from: "src/fonts", to: "fonts" },
 					{ from: "node_modules/webextension-polyfill/dist/browser-polyfill.min.js", to: "browser-polyfill.min.js" },
 					{ from: "src/flatten-shadow-dom.js", to: "flatten-shadow-dom.js" },
 					{

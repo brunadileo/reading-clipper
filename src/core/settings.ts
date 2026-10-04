@@ -13,6 +13,7 @@ import { updateTemplateList, showTemplateEditor, initializeAddPropertyButton, in
 import { initializeGeneralSettings } from '../managers/general-settings';
 import { initializeInterpreterSettings } from '../managers/interpreter-settings';
 import { showSettingsSection, initializeSidebar } from '../managers/settings-section-ui';
+import { resolveSection } from '../utils/settings-sections';
 import { initializeReaderSettings } from '../managers/reader-settings';
 import { initializeAutoSave } from '../utils/auto-save';
 import { handleTemplateDrag, initializeDragAndDrop } from '../utils/drag-and-drop';
@@ -40,11 +41,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 	// Apply section from URL params immediately to avoid flash (DOM only, no side effects)
 	const { section: initialSection } = getUrlParameters();
-	const targetSection = (initialSection === 'general' || initialSection === 'interpreter' || initialSection === 'properties' || initialSection === 'highlighter' || initialSection === 'reader') ? initialSection : 'general';
+	const targetSection = resolveSection(initialSection);
 	document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
 	document.querySelectorAll('#sidebar li[data-section]').forEach(i => i.classList.remove('active'));
 	document.getElementById(`${targetSection}-section`)?.classList.add('active');
 	document.querySelector(`#sidebar li[data-section="${targetSection}"]`)?.classList.add('active');
+	document.querySelector(`#sidebar li[data-section="${targetSection}"] button`)?.setAttribute('aria-current', 'page');
 
 	async function initializeSettings(): Promise<void> {
 		try {
@@ -86,7 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 		} catch (error) {
 			console.error('Error during settings initialization:', error);
 			// Show a basic error message but continue with minimal functionality
-			const errorContainer = document.querySelector('#content');
+			const errorContainer = document.querySelector('#lr-content');
 			if (errorContainer) {
 				errorContainer.textContent = '';
 
@@ -194,7 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 					if (templates.length > 0) {
 						showTemplateEditor(templates[0]);
 					} else {
-						showSettingsSection('general');
+						showSettingsSection('connection');
 					}
 				} else {
 					alert(getMessage('failedToDeleteTemplate'));
@@ -203,22 +205,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 		}
 	}
 
+	// Four groups only. Any other ?section= value (the hidden Obsidian pages,
+	// a template id from an old link) shows Connection.
 	async function handleUrlParameters(): Promise<void> {
-		const { section, templateId } = getUrlParameters();
-
-		if (section === 'general' || section === 'interpreter' || section === 'properties' || section === 'highlighter' || section === 'reader') {
-			showSettingsSection(section);
-		} else if (templateId) {
-			const template = findTemplateById(templateId);
-			if (template) {
-				showTemplateEditor(template);
-			} else {
-				console.error(`Template with id ${templateId} not found`);
-				showSettingsSection('general');
-			}
-		} else {
-			showSettingsSection('general');
-		}
+		const { section } = getUrlParameters();
+		showSettingsSection(resolveSection(section));
 	}
 
 	function copyCurrentTemplateToClipboard(): void {
