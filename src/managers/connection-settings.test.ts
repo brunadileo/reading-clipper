@@ -10,18 +10,18 @@ vi.mock('../utils/storage-utils', () => ({
 import { describeConnection } from './connection-settings';
 
 describe('describeConnection', () => {
-	it('connected: status and a way to open LazyReader', () => {
+	it('connected: status and a way to open Lazy Reader', () => {
 		const v = describeConnection('a1b2c3d4e5f60718293a4b5c');
 		expect(v.connected).toBe(true);
-		expect(v.title).toBe('Connected to LazyReader');
-		expect(v.action).toBe('Open LazyReader');
+		expect(v.title).toBe('Connected to Lazy Reader');
+		expect(v.action).toBe('Open Lazy Reader');
 	});
-	it('not connected: Sign in with LazyReader and the Connect this browser hint', () => {
+	it('not connected: Sign in with Lazy Reader and the Connect this browser hint', () => {
 		for (const token of ['', '   ']) {
 			const v = describeConnection(token);
 			expect(v.connected).toBe(false);
 			expect(v.title).toBe('Not connected');
-			expect(v.action).toBe('Sign in with LazyReader');
+			expect(v.action).toBe('Sign in with Lazy Reader');
 			expect(v.hint).toBe('Opens lazyreader.app. Press Connect this browser there.');
 		}
 	});

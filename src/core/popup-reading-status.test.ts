@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 
 
 describe('reading status screen (READ-233)', () => {
-	it('a success after a 401 retry hides Sign in with LazyReader', async () => {
+	it('a success after a 401 retry hides Sign in with Lazy Reader', async () => {
 		document.body.innerHTML = `
 			<div class="clipper"></div>
 			<div id="reading-status" style="display:none"><span id="reading-status-message"></span>

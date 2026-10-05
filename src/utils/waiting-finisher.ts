@@ -120,9 +120,9 @@ export function pruneAttempts(attempts: Record<string, number>, items: WaitingIt
 
 /** Check a LazyReader answer; stop the run on 401, 429, 5xx or no answer. */
 function guard(r: { ok: boolean; status?: number; error?: string }): void {
-	if (r.status === 401) throw new StopRun('token', 'LazyReader did not accept the token. Copy it again from LazyReader, Settings.');
-	if (r.status === 429) throw new StopRun('rate-limited', 'LazyReader asked us to slow down. Next run retries.');
-	if ((r.status ?? 0) >= 500 || (!r.ok && r.status === undefined)) throw new StopRun('error', r.error || 'LazyReader could not be reached. Next run retries.');
+	if (r.status === 401) throw new StopRun('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
+	if (r.status === 429) throw new StopRun('rate-limited', 'Lazy Reader asked us to slow down. Next run retries.');
+	if ((r.status ?? 0) >= 500 || (!r.ok && r.status === undefined)) throw new StopRun('error', r.error || 'Lazy Reader could not be reached. Next run retries.');
 }
 
 /** Text for one item: worker fetch first, minimized window only when that fails the check. */
@@ -243,7 +243,7 @@ export function describeFinishStatus(s: FinishState, hasToken: boolean, now: num
 }
 
 function finishStatusLine(s: FinishState, hasToken: boolean, now: number, hasAccess: boolean): string {
-	if (!hasToken) return 'Connect to LazyReader first (see Connection).';
+	if (!hasToken) return 'Connect to Lazy Reader first (see Connection).';
 	if (!hasAccess) return 'Off until you allow access to the sites you save from.';
 	if (!isEnabled(s, hasToken)) return 'Off';
 	if (s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < STALE_LOCK_MS) return 'Finishing...';

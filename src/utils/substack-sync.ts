@@ -115,7 +115,7 @@ export async function fetchPostText(deps: SyncDeps, post: SyncPost): Promise<str
 }
 
 export const PREVIEW_NOTE =
-	'\n\n[LazyReader: this is the free preview of a paid post. The rest is for paying subscribers.]';
+	'\n\n[Lazy Reader: this is the free preview of a paid post. The rest is for paying subscribers.]';
 
 /**
  * A paid post the user does not pay for comes back cut short (seen 2026-10-03:
@@ -202,9 +202,9 @@ export async function runSubstackSync(deps: SyncDeps, kind: SubstackRunKind): Pr
 				continue;
 			}
 			const sent = await deps.send(post, text);
-			if (sent.status === 401) throw new StopRun('token', 'LazyReader did not accept the token. Copy it again from LazyReader, Settings.');
+			if (sent.status === 401) throw new StopRun('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
 			if (sent.status === 429 || (sent.status ?? 0) >= 500 || (!sent.ok && sent.status === undefined)) {
-				throw new StopRun('error', sent.error || 'LazyReader could not be reached. Next run retries.');
+				throw new StopRun('error', sent.error || 'Lazy Reader could not be reached. Next run retries.');
 			}
 			if (!sent.ok) {
 				state.failed[post.id] = (state.failed[post.id] ?? 0) + 1;

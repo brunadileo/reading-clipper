@@ -18,7 +18,7 @@
 		"message": "Add provider"
 	},
 	"addToObsidian": {
-		"message": "Save to LazyReader"
+		"message": "Save to Lazy Reader"
 	},
 	"addVaultPlaceholder": {
 		"message": "Press enter to add a vault"
@@ -45,7 +45,7 @@
 		"message": "No API key"
 	},
 	"apiKeysWarning": {
-		"message": "By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. LazyReader Clipper does not gather or store any data about your requests."
+		"message": "By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. Lazy Reader Clipper does not gather or store any data about your requests."
 	},
 	"appendToDaily": {
 		"message": "Add to daily note, at the bottom"
@@ -118,7 +118,7 @@
 		"message": "Close"
 	},
 	"commandOpenClipper": {
-		"message": "Open LazyReader Clipper"
+		"message": "Open Lazy Reader Clipper"
 	},
 	"commandQuickClip": {
 		"message": "Quick clip"
@@ -225,7 +225,7 @@
 		"message": "Embedded"
 	},
 	"enableHighlighterDescription": {
-		"message": "Highlight content on web pages that you can save to LazyReader."
+		"message": "Highlight content on web pages that you can save to Lazy Reader."
 	},
 	"enableInterpreter": {
 		"message": "Enable interpreter"
@@ -283,10 +283,10 @@
 		}
 	},
 	"extensionDescription": {
-		"message": "Save the page you're on to LazyReader with one click, full article text included."
+		"message": "Save the page you're on to Lazy Reader with one click, full article text included."
 	},
 	"extensionName": {
-		"message": "LazyReader Clipper"
+		"message": "Lazy Reader Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Failed to copy text"
@@ -882,7 +882,7 @@
 		"message": "View full size"
 	},
 	"reading": {
-		"message": "LazyReader"
+		"message": "Lazy Reader"
 	},
 	"readingCaptureUrl": {
 		"message": "Capture URL"
@@ -891,16 +891,16 @@
 		"message": "Save failed ($1)."
 	},
 	"readingSettingsDescription": {
-		"message": "Where clips are sent. The token comes from LazyReader's own Settings page."
+		"message": "Where clips are sent. The token comes from Lazy Reader's own Settings page."
 	},
 	"readingSignIn": {
-		"message": "Sign in with LazyReader"
+		"message": "Sign in with Lazy Reader"
 	},
 	"readingToken": {
 		"message": "Token"
 	},
 	"readingTokenRejected": {
-		"message": "Not connected to LazyReader."
+		"message": "Not connected to Lazy Reader."
 	},
 	"recommended": {
 		"message": "recommended"
@@ -954,13 +954,13 @@
 		"message": "Saved"
 	},
 	"savedToReading": {
-		"message": "Saved to LazyReader"
+		"message": "Saved to Lazy Reader"
 	},
 	"savingToReading": {
-		"message": "Saving to LazyReader…"
+		"message": "Saving to Lazy Reader…"
 	},
 	"savedToReadingCut": {
-		"message": "Saved to LazyReader. The article is long, so only the first part was sent."
+		"message": "Saved to Lazy Reader. The article is long, so only the first part was sent."
 	},
 	"saveFile": {
 		"message": "Save file..."

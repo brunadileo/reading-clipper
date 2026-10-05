@@ -20,16 +20,16 @@ export function describeConnection(token: string): ConnectionView {
 	if (token.trim()) {
 		return {
 			connected: true,
-			title: 'Connected to LazyReader',
-			hint: 'Your saves go to your LazyReader library.',
-			action: 'Open LazyReader',
+			title: 'Connected to Lazy Reader',
+			hint: 'Your saves go to your Lazy Reader library.',
+			action: 'Open Lazy Reader',
 		};
 	}
 	return {
 		connected: false,
 		title: 'Not connected',
 		hint: 'Opens lazyreader.app. Press Connect this browser there.',
-		action: 'Sign in with LazyReader',
+		action: 'Sign in with Lazy Reader',
 	};
 }
 

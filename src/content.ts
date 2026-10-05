@@ -313,7 +313,7 @@ declare global {
 			}).catch((error: unknown) => {
 				extractionDone = true;
 				restoreScroll();
-				console.error('[LazyReader Clipper] getPageContent error:', error);
+				console.error('[Lazy Reader Clipper] getPageContent error:', error);
 				sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
 			});
 			return true;
@@ -462,7 +462,7 @@ declare global {
 	// finished loading. This keeps the first lazy-loaded action from racing
 	// content-script initialization.
 	initializationPromise = initializeHighlighter().catch((error) => {
-		console.error('[LazyReader Clipper] Failed to initialize highlighter:', error);
+		console.error('[Lazy Reader Clipper] Failed to initialize highlighter:', error);
 	});
 
 	// Expose highlighter API on window so reader-script.js (a separate

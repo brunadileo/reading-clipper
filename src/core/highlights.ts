@@ -979,7 +979,7 @@ async function exportCurrentContext() {
 			try {
 				await navigator.share({
 					files: [new File([blob], fileName, { type: 'application/json' })],
-					title: 'Exported LazyReader Clipper Highlights',
+					title: 'Exported Lazy Reader Clipper Highlights',
 				});
 			} catch {
 				window.open(blobUrl);

@@ -1,9 +1,9 @@
 {
 	"manifest_version": 3,
-	"name": "LazyReader Clipper",
+	"name": "Lazy Reader Clipper",
 	"homepage_url": "https://reader.lazyailabs.com",
 	"version": "1.7.2",
-	"description": "Save the page you're on into LazyReader, full article text included. Reads the page in your own logged-in browser, so pages LazyReader can't fetch on its own still arrive with their text.",
+	"description": "Save the page you're on into Lazy Reader, full article text included. Reads the page in your own logged-in browser, so pages Lazy Reader can't fetch on its own still arrive with their text.",
 	"permissions": [
 		"activeTab",
 		"clipboardWrite",
@@ -58,7 +58,7 @@
 				"default": "Ctrl+Shift+O",
 				"mac": "Command+Shift+O"
 			},
-			"description": "Open LazyReader Clipper"
+			"description": "Open Lazy Reader Clipper"
 		},
 		"quick_clip": {
 			"suggested_key": {

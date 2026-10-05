@@ -228,7 +228,7 @@ describe('runFinisher', () => {
 		expect(checkFullText(`${full(600)} Subscribe to read the full story`).ok).toBe(false);
 	});
 
-	it('stops on LazyReader 401, 429 and 5xx, but not on a 4xx from the article site', async () => {
+	it('stops on Lazy Reader 401, 429 and 5xx, but not on a 4xx from the article site', async () => {
 		for (const [status, reason] of [[401, 'token'], [429, 'rate-limited'], [503, 'error']] as const) {
 			const { deps, provided } = setup({
 				items: [item(1), item(2)], pages: () => ({ status: 200, html: full() }),
@@ -245,7 +245,7 @@ describe('runFinisher', () => {
 		expect(r.stopped).toBeNull();
 		expect(site403.fetched.length).toBe(2);
 	});
-	it('a network failure to LazyReader stops the run', async () => {
+	it('a network failure to Lazy Reader stops the run', async () => {
 		const { deps } = setup({ items: [item(1)], pages: () => ({ status: 200, html: full() }), provide: () => ({ ok: false, error: 'offline' }) });
 		expect((await runFinisher(deps, 'now')).stopped).toBe('error');
 	});
@@ -276,7 +276,7 @@ describe('runFinisher', () => {
 describe('describeFinishStatus wording', () => {
 	it('no token points to Connection', async () => {
 		const { describeFinishStatus, emptyFinishState } = await import('./waiting-finisher');
-		expect(describeFinishStatus(emptyFinishState(), false, 0)).toBe('Connect to LazyReader first (see Connection).');
+		expect(describeFinishStatus(emptyFinishState(), false, 0)).toBe('Connect to Lazy Reader first (see Connection).');
 	});
 	it('every status line starts with a capital letter', async () => {
 		const { describeFinishStatus, emptyFinishState } = await import('./waiting-finisher');
