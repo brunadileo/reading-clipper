@@ -26,8 +26,8 @@ export async function exportHighlights(): Promise<void> {
 				try {
 					await navigator.share({
 						files: [new File([blob], fileName, { type: 'application/json' })],
-						title: 'Exported LazyReader Clipper Highlights',
-						text: 'Here are your exported highlights from LazyReader Clipper.'
+						title: 'Exported Lazy Reader Clipper Highlights',
+						text: 'Here are your exported highlights from Lazy Reader Clipper.'
 					});
 				} catch (error) {
 					console.error('Error sharing:', error);

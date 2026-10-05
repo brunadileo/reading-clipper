@@ -37,7 +37,7 @@ export function ensureOffscreen(holder: string): Promise<void> {
 			await c().offscreen.createDocument({
 				url: 'offscreen.html',
 				reasons: ['DOM_PARSER'],
-				justification: 'Extract article text from fetched HTML for waiting LazyReader items.',
+				justification: 'Extract article text from fetched HTML for waiting Lazy Reader items.',
 			});
 		} catch (e) {
 			if (!/single offscreen/i.test(String(e))) throw e;

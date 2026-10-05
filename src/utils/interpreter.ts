@@ -162,7 +162,7 @@ export async function sendToLLM(promptContext: string, content: string, promptVa
 			headers = {
 				...headers,
 				'HTTP-Referer': 'https://lazyreader.app/',
-				'X-Title': 'LazyReader Clipper',
+				'X-Title': 'Lazy Reader Clipper',
 				'Authorization': `Bearer ${provider.apiKey}`
 			};
 		} else if (provider.name.toLowerCase().includes('ollama')) {
@@ -193,7 +193,7 @@ export async function sendToLLM(promptContext: string, content: string, promptVa
 			headers = {
 				...headers,
 				'HTTP-Referer': 'https://lazyreader.app/',
-				'X-Title': 'LazyReader Clipper',
+				'X-Title': 'Lazy Reader Clipper',
 				'Authorization': `Bearer ${provider.apiKey}`
 			};
 		}

@@ -71,7 +71,7 @@ export function parseAccountPage(html: string): { username: string | null; csrf:
 /** Credits the first sync will cost: one SociaVault post-info per post (assumed 1 credit). */
 export function creditWarning(count: number): string | null {
 	return count > IG_CREDIT_WARNING_OVER
-		? `This will use about ${count} SociaVault credits. Your SociaVault key must be saved in LazyReader Settings first, or the posts park as "no key".`
+		? `This will use about ${count} SociaVault credits. Your SociaVault key must be saved in Lazy Reader Settings first, or the posts park as "no key".`
 		: null;
 }
 
@@ -168,8 +168,8 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 			if (!first2) await deps.sleep(IG_SEND_GAP_MS);
 			first2 = false;
 			const sent = await deps.send(post, undefined);
-			if (sent.status === 401) return await finish('token', 'LazyReader did not accept the token. Copy it again from LazyReader, Settings.');
-			if (!sent.ok) return await finish('error', sent.error || `LazyReader answered ${sent.status ?? 'nothing'}`);
+			if (sent.status === 401) return await finish('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
+			if (!sent.ok) return await finish('error', sent.error || `Lazy Reader answered ${sent.status ?? 'nothing'}`);
 			out.sent++;
 			state.knownIds.push(post.id);
 		}

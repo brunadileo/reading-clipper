@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-	<title>LazyReader Clipper</title>
+	<title>Lazy Reader Clipper</title>
 	<link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
 			<div id="lr-settings">
 				<header class="lr-head">
 					<h1>Settings</h1>
-					<span class="brand">LazyReader Clipper</span>
+					<span class="brand">Lazy Reader Clipper</span>
 				</header>
 				<nav id="sidebar" class="lr-nav" aria-label="Settings sections">
 					<ul>
@@ -26,19 +26,19 @@
 
 					<section id="connection-section" class="settings-section lr-pane">
 						<h2 class="lr-h2">Connection</h2>
-						<p class="lr-sub">Where your saves go. Sign in with LazyReader and press Connect this browser on lazyreader.app, so there is nothing to paste.</p>
+						<p class="lr-sub">Where your saves go. Sign in with Lazy Reader and press Connect this browser on lazyreader.app, so there is nothing to paste.</p>
 						<div class="lr-status" id="connection-status" role="status" data-state="disconnected">
 							<span class="lr-pip" id="connection-pip"></span>
 							<div class="main">
 								<div class="t" id="connection-state">Checking connection</div>
 								<div class="hint" id="connection-hint"></div>
 							</div>
-							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in with LazyReader</button>
+							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in with Lazy Reader</button>
 							<button type="button" class="lr-btn" id="connection-disconnect" hidden>Disconnect</button>
 						</div>
 						<details class="lr-details" id="connection-advanced">
 							<summary>Advanced: server address and token</summary>
-							<p class="hint lr-advanced-note">Only change these if LazyReader support asks you to.</p>
+							<p class="hint lr-advanced-note">Only change these if Lazy Reader support asks you to.</p>
 							<div class="lr-field">
 								<label for="reading-capture-url-input">Server address</label>
 								<input type="text" id="reading-capture-url-input" autocomplete="off" spellcheck="false" />
@@ -46,7 +46,7 @@
 							<div class="lr-field">
 								<label for="reading-token-input">Token</label>
 								<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" placeholder="None yet" />
-								<span class="hint">Filled in when you connect. You can also paste the token from LazyReader Settings.</span>
+								<span class="hint">Filled in when you connect. You can also paste the token from Lazy Reader Settings.</span>
 							</div>
 							<button type="button" class="lr-btn" id="reading-reset-default">Reset to default</button>
 						</details>
@@ -54,7 +54,7 @@
 
 					<section id="sync-section" class="settings-section lr-pane">
 						<h2 class="lr-h2">Sync</h2>
-						<p class="lr-sub">Brings posts you saved on other sites into LazyReader, using your own logins in this Chrome. Your logins never reach LazyReader.</p>
+						<p class="lr-sub">Brings posts you saved on other sites into Lazy Reader, using your own logins in this Chrome. Your logins never reach Lazy Reader.</p>
 						<div class="lr-sched sync-service" data-service="schedule">
 							<div class="lr-field">
 								<label for="sync-frequency">How often</label>
@@ -90,7 +90,7 @@
 								<span class="num">2</span>
 								<div class="main">
 									<div class="t">Instagram <span class="lr-tag">Experimental</span></div>
-									<div class="d">Saved posts, at most once an hour. Instagram can restrict accounts that use automated tools, so turn it on at your own risk. Needs your SociaVault key in LazyReader Settings.</div>
+									<div class="d">Saved posts, at most once an hour. Instagram can restrict accounts that use automated tools, so turn it on at your own risk. Needs your SociaVault key in Lazy Reader Settings.</div>
 									<div class="d" id="sync-instagram-status" role="status">Off</div>
 									<button class="lr-btn link" id="sync-instagram-older" type="button" hidden>Load 100 older saves</button>
 								</div>
@@ -121,10 +121,10 @@
 
 					<section id="about-section" class="settings-section lr-pane">
 						<h2 class="lr-h2">About</h2>
-						<p class="lr-sub">LazyReader Clipper, version <span id="version-number"></span>.</p>
+						<p class="lr-sub">Lazy Reader Clipper, version <span id="version-number"></span>.</p>
 						<div class="lr-group">
 							<a class="lr-row lr-link" href="https://claude.ai/artifact/4bmMro9byWYAhX9HdmYwTM" target="_blank" rel="noopener"><div class="main"><div class="t">How the clipper works</div><div class="d">The setup guide, Chrome clipper tab.</div></div><span class="v">›</span></a>
-							<a class="lr-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">LazyReader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
+							<a class="lr-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">Lazy Reader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
 						</div>
 						<p class="hint">Built on Obsidian Web Clipper (MIT License, Copyright 2024 Obsidian). Not affiliated with or endorsed by Obsidian.</p>
 					</section>
@@ -154,7 +154,7 @@
 					<div id="navbar">
 						<div id="navbar-title">
 							<svg xmlns="http://www.w3.org/2000/svg" class="logo" viewBox="0 0 256 256"><rect x="20" y="20" width="216" height="216" rx="40"/><text x="128" y="188" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="160" fill="var(--background-primary)">R</text></svg>
-							<span>LazyReader Clipper</span>
+							<span>Lazy Reader Clipper</span>
 						</div>
 						<button id="hamburger-menu" class="hamburger-menu clickable-icon">
 							<span class="hamburger-icon"></span>
@@ -271,7 +271,7 @@
 										</div>
 										<div class="setting-item-control">
 											<select id="save-behavior-dropdown">
-												<option value="addToObsidian" selected data-i18n="addToObsidian">Save to LazyReader</option>
+												<option value="addToObsidian" selected data-i18n="addToObsidian">Save to Lazy Reader</option>
 												<option value="copyToClipboard" data-i18n="copyToClipboard">Copy to clipboard</option>
 												<option value="saveFile" data-i18n="saveFile">Save file</option>
 											</select>
@@ -651,7 +651,7 @@
 											<i data-lucide="alert-triangle"></i>
 										</div>
 										<div class="warning-text" data-i18n="apiKeysWarning">
-											By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. LazyReader Clipper does not gather or store any data about your requests.
+											By using an external provider you agree to their terms and privacy policy. Interpreter requests are sent directly to the provider you choose. Lazy Reader Clipper does not gather or store any data about your requests.
 										</div>
 									</div>
 								</div>

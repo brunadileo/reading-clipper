@@ -36,7 +36,7 @@ export interface BuildReadingCaptureBodyParams {
 // is gone since READ-21 pointed the clipper at lazyreader.app.)
 export const MAX_READING_TEXT_BYTES = 500000;
 export const READING_TEXT_CUT_NOTE =
-	'\n\n[LazyReader Clipper: this page is very long, so only the first part was saved.]';
+	'\n\n[Lazy Reader Clipper: this page is very long, so only the first part was saved.]';
 
 const encoder = new TextEncoder();
 const byteLength = (s: string) => encoder.encode(s).length;

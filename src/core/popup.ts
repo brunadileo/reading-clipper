@@ -510,7 +510,7 @@ function setupEventListeners(tabId: number) {
 						
 						const shareData = {
 							files: [file],
-							text: 'Shared from LazyReader Clipper'
+							text: 'Shared from Lazy Reader Clipper'
 						};
 
 						if (navigator.canShare(shareData)) {
