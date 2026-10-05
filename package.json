@@ -1,9 +1,9 @@
 {
-	"name": "obsidian-clipper",
-	"version": "1.7.2",
-	"description": "Official web clipper for Obsidian.",
+	"name": "lazyreader-clipper",
+	"version": "1.8.0",
+	"description": "Save the page you're on to LazyReader with one click, full article text included.",
 	"bin": {
-		"obsidian-clipper": "./dist/cli.cjs"
+		"lazyreader-clipper": "./dist/cli.cjs"
 	},
 	"files": [
 		"dist"
@@ -19,6 +19,7 @@
 		"dev:firefox": "webpack --watch --env BROWSER=firefox --mode development",
 		"dev:safari": "webpack --watch --env BROWSER=safari --mode development",
 		"build:chrome": "webpack --env BROWSER=chrome --mode production",
+		"build:store": "webpack --env BROWSER=chrome --env STORE=1 --mode production",
 		"build:firefox": "webpack --env BROWSER=firefox --mode production",
 		"build:safari": "webpack --env BROWSER=safari --mode production",
 		"build": "npm run build:chrome && npm run build:firefox && npm run build:safari",

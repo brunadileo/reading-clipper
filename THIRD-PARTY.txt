@@ -1,0 +1,12 @@
+LazyReader Clipper is built on Obsidian Web Clipper
+(https://github.com/obsidianmd/obsidian-clipper), MIT License,
+Copyright (c) 2024 Obsidian. The full licence text is in the LICENSE file.
+Not affiliated with or endorsed by Obsidian.
+
+Bundled libraries keep their own licences (as declared in each package):
+  @codemirror/*, @lezer/highlight, dayjs, defuddle, knap, lz-string: MIT
+  highlight.js: BSD-3-Clause
+  linkedom, lucide: ISC
+  dompurify: MPL-2.0 OR Apache-2.0
+  webextension-polyfill: MPL-2.0
+Transitive dependencies are listed in package-lock.json.

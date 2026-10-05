@@ -16,6 +16,11 @@ export const NOW_LIMIT = 20;
 export const MAX_ITEM_ATTEMPTS = 3;
 export const MAX_HTML_BYTES = 5_000_000;
 
+// READ-48: the store build asks for these sites at run time (optional host
+// permissions), once, with one click in Settings. Without the grant the
+// finisher skips quietly.
+export const FINISH_ORIGINS = ['https://*/*', 'http://*/*'];
+
 export type FinishTrigger = 'startup' | 'idle' | 'alarm' | 'now';
 
 export interface FinishState {
@@ -60,6 +65,8 @@ export interface FinisherDeps {
 	api: WaitingApi;
 	// True when a LazyReader token is saved.
 	hasToken: () => Promise<boolean>;
+	// True when the all-sites grant is held (always true in the default build). Omitted means yes.
+	hasAccess?: () => Promise<boolean>;
 	// Service-worker fetch with credentials 'include'. Throws on network failure.
 	fetchPage: (url: string) => Promise<FetchedPage>;
 	// HTML to article text (Defuddle in the offscreen document).
@@ -72,7 +79,7 @@ export interface FinisherDeps {
 }
 
 export interface FinishResult {
-	skipped: 'disabled' | 'no-token' | 'busy' | 'throttled' | null;
+	skipped: 'disabled' | 'no-token' | 'no-access' | 'busy' | 'throttled' | null;
 	finished: number;
 	membersOnly: number;
 	unreadable: number;
@@ -94,8 +101,9 @@ export function isEnabled(state: FinishState, hasToken: boolean): boolean {
 }
 
 /** Pure: should a run start now? */
-export function shouldRun(trigger: FinishTrigger, state: FinishState, hasToken: boolean, now: number): FinishResult['skipped'] {
+export function shouldRun(trigger: FinishTrigger, state: FinishState, hasToken: boolean, now: number, hasAccess = true): FinishResult['skipped'] {
 	if (!hasToken) return 'no-token';
+	if (!hasAccess) return 'no-access';
 	if (trigger !== 'now' && !isEnabled(state, hasToken)) return 'disabled';
 	if (state.running && state.lastAttemptAt !== null && now - state.lastAttemptAt < STALE_LOCK_MS) return 'busy';
 	if (trigger !== 'now' && state.lastAttemptAt !== null && now - state.lastAttemptAt < AUTO_MIN_GAP_MS) return 'throttled';
@@ -148,7 +156,8 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 	const result: FinishResult = { skipped: null, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, stopped: null };
 	const state = await loadFinishState(deps.store);
 	const hasToken = await deps.hasToken();
-	result.skipped = shouldRun(trigger, state, hasToken, deps.now());
+	const hasAccess = deps.hasAccess ? await deps.hasAccess() : true;
+	result.skipped = shouldRun(trigger, state, hasToken, deps.now(), hasAccess);
 	if (result.skipped) return result;
 
 	state.running = true;
@@ -222,14 +231,20 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 	return result;
 }
 
+/** Pure: the finisher is meant to run (on by default or switched on) but the all-sites grant is missing. */
+export function finishNeedsAccess(s: FinishState, hasToken: boolean, hasAccess: boolean): boolean {
+	return hasToken && isEnabled(s, hasToken) && !hasAccess;
+}
+
 /** Pure: the status line for the settings page. */
-export function describeFinishStatus(s: FinishState, hasToken: boolean, now: number): string {
-	const line = finishStatusLine(s, hasToken, now);
+export function describeFinishStatus(s: FinishState, hasToken: boolean, now: number, hasAccess = true): string {
+	const line = finishStatusLine(s, hasToken, now, hasAccess);
 	return line.charAt(0).toUpperCase() + line.slice(1);
 }
 
-function finishStatusLine(s: FinishState, hasToken: boolean, now: number): string {
+function finishStatusLine(s: FinishState, hasToken: boolean, now: number, hasAccess: boolean): string {
 	if (!hasToken) return 'Connect to LazyReader first (see Connection).';
+	if (!hasAccess) return 'Off until you allow access to the sites you save from.';
 	if (!isEnabled(s, hasToken)) return 'Off';
 	if (s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < STALE_LOCK_MS) return 'Finishing...';
 	const waiting = s.waitingCount === null ? '' : `${s.waitingCount} waiting, `;

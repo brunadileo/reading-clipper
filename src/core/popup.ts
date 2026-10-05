@@ -11,6 +11,7 @@ import { getLocalStorage, setLocalStorage, loadSettings, generalSettings, Settin
 import { escapeHtml, unescapeValue } from '../utils/string-utils';
 import { loadTemplates, createDefaultTemplate } from '../managers/template-manager';
 import browser from '../utils/browser-polyfill';
+import { CONNECT_URL } from '../utils/reading-token';
 import { addBrowserClassToHtml, detectBrowser } from '../utils/browser-detection';
 import { createElementWithClass } from '../utils/dom-utils';
 import { initializeInterpreter, handleInterpreterUI, collectPromptVariables } from '../utils/interpreter';
@@ -509,7 +510,7 @@ function setupEventListeners(tabId: number) {
 						
 						const shareData = {
 							files: [file],
-							text: 'Shared from Obsidian Web Clipper'
+							text: 'Shared from LazyReader Clipper'
 						};
 
 						if (navigator.canShare(shareData)) {
@@ -1406,9 +1407,8 @@ async function handleClipObsidian(): Promise<void> {
 				setTimeout(() => window.close(), 1500);
 			}
 		} else if (result.status === 401) {
-			// The background already tried to fetch a fresh token through the
-			// lazyreader.app session; reaching here means no signed-in session.
-			showReadingRetry(getMessage('readingTokenRejected'));
+			// No token, or the server rejected it: offer the explicit connect.
+			showReadingRetry(getMessage('readingTokenRejected'), true);
 		} else {
 			// Reading's own error text when it sent one, so the popup says why.
 			const statusText = result.error || (result.status ? String(result.status) : getMessage('unknownError'));
@@ -1435,12 +1435,15 @@ function showReadingStatusMessage(message: string): void {
 	statusMessage.textContent = message;
 	if (openLink) openLink.style.display = 'none';
 	if (tryAgainBtn) tryAgainBtn.style.display = 'none';
+	// A 401 screen's Sign in button must not outlive a later success.
+	const signInBtn = document.getElementById('reading-sign-in') as HTMLButtonElement | null;
+	if (signInBtn) signInBtn.style.display = 'none';
 	statusEl.style.display = 'flex';
 	clipper.style.display = 'none';
 	document.body.classList.add('has-reading-status');
 }
 
-function showReadingSuccess(readUrl: string | undefined, message: string): void {
+export function showReadingSuccess(readUrl: string | undefined, message: string): void {
 	showReadingStatusMessage(message);
 	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
 	if (openLink && readUrl) {
@@ -1449,8 +1452,16 @@ function showReadingSuccess(readUrl: string | undefined, message: string): void 
 	}
 }
 
-function showReadingRetry(message: string): void {
+export function showReadingRetry(message: string, offerSignIn = false): void {
 	showReadingStatusMessage(message);
+	const signInBtn = document.getElementById('reading-sign-in') as HTMLButtonElement | null;
+	if (signInBtn) {
+		signInBtn.style.display = offerSignIn ? 'inline-block' : 'none';
+		signInBtn.onclick = () => {
+			void browser.tabs.create({ url: CONNECT_URL });
+			window.close();
+		};
+	}
 	const tryAgainBtn = document.getElementById('reading-try-again') as HTMLButtonElement | null;
 	if (tryAgainBtn) {
 		tryAgainBtn.style.display = 'inline-block';

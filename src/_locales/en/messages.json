@@ -107,7 +107,7 @@
 		}
 	},
 	"clipboardError": {
-		"message": "Obsidian is not able to access your clipboard. Try the troubleshooting instructions here: $1",
+		"message": "The clipper is not able to access your clipboard. Try the troubleshooting instructions here: $1",
 		"placeholders": {
 			"1": {
 				"content": "$1"
@@ -196,13 +196,13 @@
 		"message": "Duplicate"
 	},
 	"earlyAccessDescription": {
-		"message": "Use features that require the latest $link_start$early access version$link_end$ of Obsidian. Currently requires Obsidian 1.7.2 or later.",
+		"message": "Use experimental clipper features.",
 		"placeholders": {
 			"link_end": {
 				"content": "</a>"
 			},
 			"link_start": {
-				"content": "<a href=\"https://help.obsidian.md/Obsidian/Early+access+versions\" target=\"_blank\">"
+				"content": "<a href=\"https://lazyreader.app\" target=\"_blank\">"
 			}
 		}
 	},
@@ -225,7 +225,7 @@
 		"message": "Embedded"
 	},
 	"enableHighlighterDescription": {
-		"message": "Highlight content on web pages that you can save to Obsidian."
+		"message": "Highlight content on web pages that you can save to LazyReader."
 	},
 	"enableInterpreter": {
 		"message": "Enable interpreter"
@@ -237,7 +237,7 @@
 				"content": "</a>"
 			},
 			"link_start": {
-				"content": "<a href=\"https://help.obsidian.md/web-clipper/interpreter\" target=\"_blank\">"
+				"content": "<a href=\"https://lazyreader.app\" target=\"_blank\">"
 			},
 			"strong_end": {
 				"content": "</strong>"
@@ -272,7 +272,7 @@
 		"message": "Export properties"
 	},
 	"exportPropertiesDescription": {
-		"message": "Save Web Clipper properties to a $strong_start$types.json$strong_end$ file that can be imported into your Obsidian vault, or into Web Clipper on other devices.",
+		"message": "Save Web Clipper properties to a $strong_start$types.json$strong_end$ file that can be imported on other devices.",
 		"placeholders": {
 			"strong_end": {
 				"content": "</strong>"
@@ -283,7 +283,7 @@
 		}
 	},
 	"extensionDescription": {
-		"message": "Save content from the web in a private and durable format that you can access offline. The official browser extension for Obsidian."
+		"message": "Save the page you're on to LazyReader with one click, full article text included."
 	},
 	"extensionName": {
 		"message": "LazyReader Clipper"
@@ -423,7 +423,7 @@
 		"message": "Import properties"
 	},
 	"importPropertiesDescription": {
-		"message": "To import your properties from Obsidian, locate the $strong_1_start$types.json$strong_1_end$ file in the $strong_2_start$.obsidian$strong_2_end$ folder within your vault. Note this folder is hidden by default on most operating systems.",
+		"message": "To import your properties, choose a $strong_1_start$types.json$strong_1_end$ file exported from the clipper on another device.",
 		"placeholders": {
 			"strong_1_end": {
 				"content": "</strong>"
@@ -490,7 +490,7 @@
 		"message": "Legacy mode"
 	},
 	"legacyModeDescription": {
-		"message": "Uses the URI clipping method compatible with Obsidian 1.6.7 or earlier. Note that the length of the content you can clip is limited by your browser and OS. Some pages may fail without any errors."
+		"message": "Uses the older clipping method. Note that the length of the content you can clip is limited by your browser and OS. Some pages may fail without any errors."
 	},
 	"loadArticle": {
 		"message": "Read article"
@@ -565,7 +565,7 @@
 				"content": "</a>"
 			},
 			"link_start": {
-				"content": "<a href=\"https://help.obsidian.md/web-clipper/variables\" target=\"_blank\">"
+				"content": "<a href=\"https://lazyreader.app\" target=\"_blank\">"
 			}
 		}
 	},
@@ -893,11 +893,14 @@
 	"readingSettingsDescription": {
 		"message": "Where clips are sent. The token comes from LazyReader's own Settings page."
 	},
+	"readingSignIn": {
+		"message": "Sign in with LazyReader"
+	},
 	"readingToken": {
 		"message": "Token"
 	},
 	"readingTokenRejected": {
-		"message": "Not connected to LazyReader. Sign in at lazyreader.app in this Chrome, then try again."
+		"message": "Not connected to LazyReader."
 	},
 	"recommended": {
 		"message": "recommended"
@@ -1023,7 +1026,7 @@
 		"message": "Save clipped note without opening it"
 	},
 	"silentOpenDescription": {
-		"message": "Clipped notes will be saved but will not open as a new tab. Obsidian will still be brought to the foreground."
+		"message": "Saved items will not open as a new tab."
 	},
 	"sort": {
 		"message": "Sort"
@@ -1124,7 +1127,7 @@
 		"message": "Vaults"
 	},
 	"vaultsDescription": {
-		"message": "By default, clipped notes are saved to the currently open vault. You can add vaults here if you want the option to save to different vaults. Vault names must exactly match the name of the Obsidian vault. Press $strong_start$enter$strong_end$ to add a vault.",
+		"message": "By default, clipped notes are saved to the currently open vault. You can add vaults here if you want the option to save to different vaults. Vault names must exactly match the name of the vault. Press $strong_start$enter$strong_end$ to add a vault.",
 		"placeholders": {
 			"strong_end": {
 				"content": "</strong>"

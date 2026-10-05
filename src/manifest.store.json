@@ -1,0 +1,74 @@
+{
+	"manifest_version": 3,
+	"default_locale": "en",
+	"name": "LazyReader Clipper",
+	"homepage_url": "https://lazyreader.app",
+	"version": "1.8.0",
+	"description": "Save the page you're on to LazyReader with one click, full article text included.",
+	"permissions": [
+		"activeTab",
+		"commands",
+		"contextMenus",
+		"storage",
+		"scripting",
+		"alarms",
+		"idle",
+		"offscreen"
+	],
+	"host_permissions": [
+		"https://lazyreader.app/*"
+	],
+	"optional_host_permissions": [
+		"https://substack.com/*",
+		"https://*.substack.com/*",
+		"https://*/*",
+		"http://*/*"
+	],
+	"action": {
+		"default_popup": "popup.html"
+	},
+	"options_ui": {
+		"page": "settings.html",
+		"open_in_tab": true
+	},
+	"icons": {
+		"16": "icons/icon16.png",
+		"48": "icons/icon48.png",
+		"128": "icons/icon128.png"
+	},
+	"background": {
+		"service_worker": "background.js"
+	},
+	"content_scripts": [
+		{
+			"matches": ["https://lazyreader.app/*"],
+			"js": ["lazyreader-relay.js"],
+			"run_at": "document_start"
+		}
+	],
+	"web_accessible_resources": [
+		{
+			"resources": ["flatten-shadow-dom.js"],
+			"matches": ["http://*/*", "https://*/*"]
+		}
+	],
+	"content_security_policy": {
+		"extension_pages": "script-src 'self'; object-src 'self'"
+	},
+	"commands": {
+		"_execute_action": {
+			"suggested_key": {
+				"default": "Ctrl+Shift+O",
+				"mac": "Command+Shift+O"
+			},
+			"description": "__MSG_commandOpenClipper__"
+		},
+		"quick_clip": {
+			"suggested_key": {
+				"default": "Alt+Shift+O",
+				"mac": "Alt+Shift+O"
+			},
+			"description": "__MSG_commandQuickClip__"
+		}
+	}
+}

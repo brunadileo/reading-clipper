@@ -26,14 +26,15 @@
 
 					<section id="connection-section" class="settings-section lr-pane">
 						<h2 class="lr-h2">Connection</h2>
-						<p class="lr-sub">Where your saves go. The clipper uses your LazyReader sign-in in this Chrome, so there is nothing to paste.</p>
+						<p class="lr-sub">Where your saves go. Sign in with LazyReader and press Connect this browser on lazyreader.app, so there is nothing to paste.</p>
 						<div class="lr-status" id="connection-status" role="status" data-state="disconnected">
 							<span class="lr-pip" id="connection-pip"></span>
 							<div class="main">
 								<div class="t" id="connection-state">Checking connection</div>
 								<div class="hint" id="connection-hint"></div>
 							</div>
-							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in</button>
+							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in with LazyReader</button>
+							<button type="button" class="lr-btn" id="connection-disconnect" hidden>Disconnect</button>
 						</div>
 						<details class="lr-details" id="connection-advanced">
 							<summary>Advanced: server address and token</summary>
@@ -45,7 +46,7 @@
 							<div class="lr-field">
 								<label for="reading-token-input">Token</label>
 								<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" placeholder="None yet" />
-								<span class="hint">Filled in by itself from your sign-in.</span>
+								<span class="hint">Filled in when you connect. You can also paste the token from LazyReader Settings.</span>
 							</div>
 							<button type="button" class="lr-btn" id="reading-reset-default">Reset to default</button>
 						</details>
@@ -96,11 +97,12 @@
 								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
 							</div>
 							<div class="lr-row sync-service" data-service="finish">
-								<span class="num">3</span>
+								<span class="num" id="finish-num">3</span>
 								<div class="main">
 									<div class="t">Finish waiting articles</div>
-									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what steps 1 and 2 just saved.</div>
+									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what the steps above just saved. Chrome asks once for access to the sites you save from.</div>
 									<div class="d" id="finish-status" role="status">Off</div>
+									<button class="lr-btn" id="finish-allow" type="button" hidden>Allow access</button>
 									<a class="lr-btn link" id="finish-open-list" hidden href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
@@ -124,7 +126,7 @@
 							<a class="lr-row lr-link" href="https://claude.ai/artifact/4bmMro9byWYAhX9HdmYwTM" target="_blank" rel="noopener"><div class="main"><div class="t">How the clipper works</div><div class="d">The setup guide, Chrome clipper tab.</div></div><span class="v">›</span></a>
 							<a class="lr-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">LazyReader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
 						</div>
-						<p class="hint">Built on the Obsidian Web Clipper (MIT licence).</p>
+						<p class="hint">Built on Obsidian Web Clipper (MIT License, Copyright 2024 Obsidian). Not affiliated with or endorsed by Obsidian.</p>
 					</section>
 
 				</div>
@@ -244,7 +246,7 @@
 											<div class="setting-item-description" data-i18n="helpDescription">Learn how to use Web Clipper and get help troubleshooting.</div>
 										</div>
 										<div class="setting-item-control">
-											<a href="https://help.obsidian.md/web-clipper" id="help-open-btn" class="btn" target="_blank" data-i18n="open">Open</a>
+											<a href="https://lazyreader.app" id="help-open-btn" class="btn" target="_blank" data-i18n="open">Open</a>
 										</div>
 									</div>
 								</div>
@@ -252,7 +254,7 @@
 							<div class="setting-group" id="vaults-settings-group" style="display: none;">
 								<div class="setting-item setting-item-heading"><h3 data-i18n="vaults">Vaults</h3></div>
 								<div class="setting-items">
-								<div class="setting-item-description" data-i18n="vaultsDescription">By default, clipped notes are saved to the currently open vault. You can add vaults here if you want the option to save to different vaults. Vault names must exactly match the name of the Obsidian vault. Press <strong>enter</strong> to add a&nbsp;vault.</div>
+								<div class="setting-item-description" data-i18n="vaultsDescription">By default, clipped notes are saved to the currently open vault. You can add vaults here if you want the option to save to different vaults. Vault names must exactly match the name of the vault. Press <strong>enter</strong> to add a&nbsp;vault.</div>
 								<input type="text" id="vault-input" data-i18n="addVaultPlaceholder" placeholder="Press enter to add a vault" autocomplete="off" spellcheck="false" />
 								<ul id="vault-list" class="setting-item-list"></ul>
 								</div>
@@ -294,7 +296,7 @@
 										<div class="setting-item-info">
 											<label for="silent-open-toggle" data-i18n="silentOpen">Save clipped note without opening&nbsp;it</label>
 											<div class="setting-item-description" data-i18n="silentOpenDescription">
-												Clipped notes will be saved but will not open as a new tab. Obsidian will still be brought to the foreground.
+												Saved items will not open as a new tab.
 											</div>
 										</div>
 										<div class="setting-item-control">
@@ -307,7 +309,7 @@
 										<div class="setting-item-info">
 											<label for="legacy-mode-toggle" data-i18n="legacyMode">Legacy&nbsp;mode</label>
 											<div class="setting-item-description" data-i18n="legacyModeDescription">
-												Uses the URI clipping method compatible with Obsidian 1.6.7 or earlier. Note that the length of the content you can clip is limited by your browser and OS. Some pages may fail without any errors.
+												Uses the older clipping method. Note that the length of the content you can clip is limited by your browser and OS. Some pages may fail without any errors.
 											</div>
 										</div>
 										<div class="setting-item-control">
@@ -332,7 +334,7 @@
 										<div class="setting-item-info">
 											<label for="beta-features-toggle" data-i18n="earlyAccessFeatures">Early access features</label>
 											<div class="setting-item-description" data-i18n="earlyAccessDescription">
-												Use features that require the latest <a href="https://help.obsidian.md/Obsidian/Early+access+versions" target="_blank">early access version</a> of Obsidian. Currently requires Obsidian 1.7.2 or later.
+												Use experimental clipper features.
 											</div>
 										</div>
 										<div class="setting-item-control">
@@ -619,7 +621,7 @@
 										<div class="setting-item-info">
 											<label for="interpreter-toggle" data-i18n="enableInterpreter">Enable interpreter</label>
 											<div class="setting-item-description" data-i18n="enableInterpreterDescription">
-												Use natural language to extract data from pages. For example, you can use the template syntax <strong>{{"a summary of the page"}}</strong>. Requires an API key or custom model configured below. <a href="https://help.obsidian.md/web-clipper/interpreter" target="_blank">Learn more</a>.
+												Use natural language to extract data from pages. For example, you can use the template syntax <strong>{{"a summary of the page"}}</strong>. Requires an API key or custom model configured below. <a href="https://lazyreader.app" target="_blank">Learn more</a>.
 											</div>
 										</div>
 										<div class="setting-item-control">
@@ -698,7 +700,7 @@
 									<div class="setting-item-info">
 										<label for="import-types-btn" data-i18n="importProperties">Import properties</label>
 										<div class="setting-item-description" data-i18n="importPropertiesDescription">
-											To import your properties from Obsidian, locate the <strong>types.json</strong> file in the <strong>.obsidian</strong> folder within your vault. Note this folder is hidden by default on most operating systems.
+											To import your properties, choose a <strong>types.json</strong> file exported from the clipper on another device.
 										</div>
 									</div>
 									<div class="setting-item-control">
@@ -709,7 +711,7 @@
 									<div class="setting-item-info">
 										<label for="export-types-btn" data-i18n="exportProperties">Export properties</label>
 										<div class="setting-item-description" data-i18n="exportPropertiesDescription">
-											Save Web Clipper properties to a <strong>types.json</strong> file that can be imported into your Obsidian vault, or into Web Clipper on other devices.
+											Save Web Clipper properties to a <strong>types.json</strong> file that can be imported on other devices.
 										</div>
 									</div>
 									<div class="setting-item-control">

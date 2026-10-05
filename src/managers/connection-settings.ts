@@ -1,13 +1,12 @@
 // Settings group "Connection": a status card driven by the stored capture
-// token (the background fills it in from the lazyreader.app session), a
-// button to sign in or open LazyReader, and "Reset to default" for the
-// advanced server address. The two inputs themselves are bound in
+// token (lazyreader.app hands it over when the user presses Connect this
+// browser), a button to sign in or open LazyReader, a quiet Disconnect, and
+// "Reset to default" for the advanced server address. The two inputs themselves are bound in
 // general-settings.ts (initializeReadingSettings).
 import browser from '../utils/browser-polyfill';
 import { setText } from '../utils/set-text';
 import { DEFAULT_READING_CAPTURE_URL, loadReadingSettings, saveReadingSettings } from '../utils/storage-utils';
-
-const LAZYREADER_URL = 'https://lazyreader.app';
+import { CONNECT_URL, LAZYREADER_ORIGIN } from '../utils/reading-token';
 
 export interface ConnectionView {
 	connected: boolean;
@@ -29,8 +28,8 @@ export function describeConnection(token: string): ConnectionView {
 	return {
 		connected: false,
 		title: 'Not connected',
-		hint: 'Sign in to lazyreader.app in this Chrome. This page connects by itself once you are in.',
-		action: 'Sign in',
+		hint: 'Opens lazyreader.app. Press Connect this browser there.',
+		action: 'Sign in with LazyReader',
 	};
 }
 
@@ -54,6 +53,7 @@ async function refresh(): Promise<void> {
 	const card = document.getElementById('connection-status');
 	const pip = document.getElementById('connection-pip');
 	const action = document.getElementById('connection-action');
+	const disconnect = document.getElementById('connection-disconnect');
 	const dot = document.getElementById('nav-connection-dot');
 	const dotText = document.getElementById('nav-connection-sr');
 	card?.setAttribute('data-state', view.connected ? 'connected' : 'disconnected');
@@ -68,10 +68,11 @@ async function refresh(): Promise<void> {
 		action.classList.toggle('primary', !view.connected);
 		action.hidden = false;
 	}
+	if (disconnect) disconnect.hidden = !view.connected;
 	if (dot) dot.hidden = view.connected;
 	if (dotText) dotText.hidden = view.connected;
 
-	// A token that arrives while this page is open (sign-in finished) shows up
+	// A token that arrives while this page is open (connect finished) shows up
 	// in the field too.
 	refreshField(document.getElementById('reading-token-input') as HTMLInputElement | null, token);
 	refreshField(document.getElementById('reading-capture-url-input') as HTMLInputElement | null, captureUrl);
@@ -79,8 +80,17 @@ async function refresh(): Promise<void> {
 
 export function initializeConnectionSettings(): void {
 	const action = document.getElementById('connection-action');
-	action?.addEventListener('click', () => {
-		void browser.tabs.create({ url: LAZYREADER_URL });
+	action?.addEventListener('click', async () => {
+		const { token } = await loadReadingSettings();
+		void browser.tabs.create({ url: describeConnection(token).connected ? LAZYREADER_ORIGIN : CONNECT_URL });
+	});
+
+	// Clears the token in this browser only; Regenerate on lazyreader.app
+	// revokes it everywhere.
+	document.getElementById('connection-disconnect')?.addEventListener('click', async () => {
+		const tokenInput = document.getElementById('reading-token-input') as HTMLInputElement | null;
+		if (tokenInput) setFieldValue(tokenInput, '');
+		await saveReadingSettings({ token: '' });
 	});
 
 	const reset = document.getElementById('reading-reset-default');

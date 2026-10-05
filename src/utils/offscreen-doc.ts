@@ -1,7 +1,6 @@
 // The one offscreen document, shared by every job that needs it. Chrome allows
 // a single offscreen document per extension, so READ-181's finisher (Defuddle
-// needs a DOM) and the capture-token lookup (a hidden lazyreader.app iframe)
-// both go through here. Each job names itself; the document closes only when
+// needs a DOM) and any later job go through here. Each job names itself; the document closes only when
 // the last job lets go. Calls run one after another so a close never races a
 // create.
 
@@ -37,8 +36,8 @@ export function ensureOffscreen(holder: string): Promise<void> {
 		try {
 			await c().offscreen.createDocument({
 				url: 'offscreen.html',
-				reasons: ['DOM_PARSER', 'IFRAME_SCRIPTING'],
-				justification: 'Extract article text from fetched HTML for waiting LazyReader items, and read the LazyReader sign-in in a hidden frame to fetch the capture token.',
+				reasons: ['DOM_PARSER'],
+				justification: 'Extract article text from fetched HTML for waiting LazyReader items.',
 			});
 		} catch (e) {
 			if (!/single offscreen/i.test(String(e))) throw e;

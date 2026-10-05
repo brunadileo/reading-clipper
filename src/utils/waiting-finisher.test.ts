@@ -284,3 +284,29 @@ describe('describeFinishStatus wording', () => {
 		expect(describeFinishStatus(s, true, 5 * 60000)).toMatch(/^[A-Z0-9]/);
 	});
 });
+
+describe('READ-48 all-sites grant', () => {
+	it('shouldRun skips quietly without the grant, whatever the trigger', () => {
+		const now = 50_000_000;
+		expect(shouldRun('alarm', emptyFinishState(), true, now, false)).toBe('no-access');
+		expect(shouldRun('now', emptyFinishState(), true, now, false)).toBe('no-access');
+		expect(shouldRun('alarm', emptyFinishState(), true, now, true)).toBeNull();
+		expect(shouldRun('alarm', emptyFinishState(), false, now, false)).toBe('no-token');
+	});
+	it('runFinisher does no fetch and no list call without the grant', async () => {
+		const { deps, fetched, provided } = setup({ items: [item(1)] });
+		const r = await runFinisher({ ...deps, hasAccess: async () => false }, 'alarm');
+		expect(r.skipped).toBe('no-access');
+		expect(fetched).toEqual([]);
+		expect(provided).toEqual([]);
+	});
+	it('needs-access and status wording', async () => {
+		const { describeFinishStatus, finishNeedsAccess } = await import('./waiting-finisher');
+		const s = emptyFinishState();
+		expect(finishNeedsAccess(s, true, false)).toBe(true);
+		expect(finishNeedsAccess(s, true, true)).toBe(false);
+		expect(finishNeedsAccess(s, false, false)).toBe(false);
+		expect(finishNeedsAccess({ ...s, enabled: false }, true, false)).toBe(false);
+		expect(describeFinishStatus(s, true, 0, false)).toBe('Off until you allow access to the sites you save from.');
+	});
+});
