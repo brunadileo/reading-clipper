@@ -893,11 +893,14 @@
 	"readingSettingsDescription": {
 		"message": "Where clips are sent. The token comes from LazyReader's own Settings page."
 	},
+	"readingSignIn": {
+		"message": "Sign in with LazyReader"
+	},
 	"readingToken": {
 		"message": "Token"
 	},
 	"readingTokenRejected": {
-		"message": "Not connected to LazyReader. Sign in at lazyreader.app in this Chrome, then try again."
+		"message": "Not connected to LazyReader."
 	},
 	"recommended": {
 		"message": "recommended"
