@@ -1435,12 +1435,15 @@ function showReadingStatusMessage(message: string): void {
 	statusMessage.textContent = message;
 	if (openLink) openLink.style.display = 'none';
 	if (tryAgainBtn) tryAgainBtn.style.display = 'none';
+	// A 401 screen's Sign in button must not outlive a later success.
+	const signInBtn = document.getElementById('reading-sign-in') as HTMLButtonElement | null;
+	if (signInBtn) signInBtn.style.display = 'none';
 	statusEl.style.display = 'flex';
 	clipper.style.display = 'none';
 	document.body.classList.add('has-reading-status');
 }
 
-function showReadingSuccess(readUrl: string | undefined, message: string): void {
+export function showReadingSuccess(readUrl: string | undefined, message: string): void {
 	showReadingStatusMessage(message);
 	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
 	if (openLink && readUrl) {
@@ -1449,7 +1452,7 @@ function showReadingSuccess(readUrl: string | undefined, message: string): void 
 	}
 }
 
-function showReadingRetry(message: string, offerSignIn = false): void {
+export function showReadingRetry(message: string, offerSignIn = false): void {
 	showReadingStatusMessage(message);
 	const signInBtn = document.getElementById('reading-sign-in') as HTMLButtonElement | null;
 	if (signInBtn) {
