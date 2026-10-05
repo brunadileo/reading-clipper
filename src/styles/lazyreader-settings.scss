@@ -506,7 +506,7 @@
 
 		&.run {
 			background: var(--lr-accent);
-			animation: lr-pulse 1.4s ease-in-out infinite;
+			animation: lrs-pulse 1.4s ease-in-out infinite;
 		}
 	}
 
@@ -593,7 +593,7 @@
 	}
 }
 
-@keyframes lr-pulse {
+@keyframes lrs-pulse {
 	50% {
 		opacity: 0.35;
 	}
