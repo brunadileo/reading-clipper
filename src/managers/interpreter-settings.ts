@@ -1,3 +1,4 @@
+import { IS_STORE_BUILD } from '../utils/store-build';
 import { initializeToggles, initializeSettingToggle } from '../utils/ui-utils';
 import { ModelConfig, Provider } from '../types/types';
 import { generalSettings, loadSettings, saveSettings, getLocalStorage, setLocalStorage } from '../utils/storage-utils';
@@ -25,7 +26,7 @@ interface ProviderPresets {
 	[key: string]: PresetProvider | string;
 }
 
-const PROVIDERS_URL = 'https://raw.githubusercontent.com/obsidianmd/obsidian-clipper/refs/heads/main/providers.json';
+const PROVIDERS_URL = 'https://raw.githubusercontent.com/brunadileo/reading-clipper/refs/heads/reading/providers.json';
 const PRESET_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const PRESET_RETRY_DELAY = 60 * 1000; // 1 minute
 const LOCAL_STORAGE_KEY = 'provider_presets';
@@ -107,6 +108,9 @@ async function shouldUpdatePresets(): Promise<boolean> {
 }
 
 export async function getPresetProviders(): Promise<Record<string, PresetProvider>> {
+	// Store build: the interpreter is not part of the listing, and opening Settings
+	// must not fetch anything from a third-party host (READ-48 privacy audit).
+	if (IS_STORE_BUILD) return {};
 	const now = Date.now();
 
 	if (cachedPresets && (now - lastFetchTime < PRESET_CACHE_DURATION)) {

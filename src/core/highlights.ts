@@ -972,14 +972,14 @@ async function exportCurrentContext() {
 
 	const browserType = await detectBrowser();
 	const timestamp = dayjs().format('YYYYMMDDHHmm');
-	const fileName = `obsidian-web-clipper-highlights-${timestamp}.json`;
+	const fileName = `lazyreader-clipper-highlights-${timestamp}.json`;
 
 	if (browserType === 'safari' || browserType === 'mobile-safari') {
 		if (navigator.share) {
 			try {
 				await navigator.share({
 					files: [new File([blob], fileName, { type: 'application/json' })],
-					title: 'Exported Obsidian Web Clipper Highlights',
+					title: 'Exported LazyReader Clipper Highlights',
 				});
 			} catch {
 				window.open(blobUrl);

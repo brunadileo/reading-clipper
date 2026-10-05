@@ -26,10 +26,10 @@ import { showModal, hideModal } from '../utils/modal-utils';
 dayjs.extend(weekOfYear);
 
 const STORE_URLS = {
-	chrome: 'https://chromewebstore.google.com/detail/obsidian-web-clipper/cnjifjpddelmedmihgijeibhnjfabmlf',
-	firefox: 'https://addons.mozilla.org/en-US/firefox/addon/web-clipper-obsidian/',
-	safari: 'https://apps.apple.com/us/app/obsidian-web-clipper/id6720708363',
-	edge: 'https://microsoftedge.microsoft.com/addons/detail/obsidian-web-clipper/eigdjhmgnaaeaonimdklocfekkaanfme'
+	chrome: 'https://lazyreader.app',
+	firefox: 'https://lazyreader.app',
+	safari: 'https://lazyreader.app',
+	edge: 'https://lazyreader.app'
 };
 
 export function updateVaultList(): void {

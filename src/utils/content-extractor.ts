@@ -118,7 +118,7 @@ export async function extractPageContent(tabId: number, scrollToLoad = false): P
 		try {
 			return await sendExtractRequest(tabId, scrollToLoad);
 		} catch (retryError) {
-			console.error('[Obsidian Clipper] Extraction failed after retry:', retryError);
+			console.error('[LazyReader Clipper] Extraction failed after retry:', retryError);
 			throw new Error('Web Clipper was not able to start. Please try reloading the page.');
 		}
 	}

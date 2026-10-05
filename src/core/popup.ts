@@ -509,7 +509,7 @@ function setupEventListeners(tabId: number) {
 						
 						const shareData = {
 							files: [file],
-							text: 'Shared from Obsidian Web Clipper'
+							text: 'Shared from LazyReader Clipper'
 						};
 
 						if (navigator.canShare(shareData)) {

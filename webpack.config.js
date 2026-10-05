@@ -193,7 +193,7 @@ module.exports = (env, argv) => {
 					path: path.resolve(__dirname, 'builds'),
 					filename: isStore
 						? `lazyreader-clipper-${package.version}-chrome.zip`
-						: `obsidian-web-clipper-${package.version}-${browserName}.zip`,
+						: `lazyreader-clipper-${package.version}-${browserName}-local.zip`,
 				})
 			] : [])
 		]

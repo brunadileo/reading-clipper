@@ -30,7 +30,7 @@ async function enableYouTubeEmbedRule(tabId: number): Promise<void> {
 				requestHeaders: [{
 					header: 'Referer',
 					operation: 'set' as any,
-					value: 'https://obsidian.md/'
+					value: 'https://lazyreader.app/'
 				}]
 			},
 			condition: {
@@ -722,7 +722,7 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 				injectContentScript(tabId)
 					.then(() => sendResponse({ success: true }))
 					.catch((error) => {
-						console.error('[Obsidian Clipper] forceInjectContentScript failed:', error);
+						console.error('[LazyReader Clipper] forceInjectContentScript failed:', error);
 						sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
 					});
 				return true;
@@ -739,7 +739,7 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 				routeMessageToTab(tabId, message).then((response) => {
 					sendResponse(response);
 				}).catch((error) => {
-					console.error('[Obsidian Clipper] Error sending message to tab:', error);
+					console.error('[LazyReader Clipper] Error sending message to tab:', error);
 					sendResponse({
 						success: false,
 						error: error instanceof Error ? error.message : String(error)
@@ -777,7 +777,7 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 						browser.tabs.update(currentTab.id, { url: url }).then(() => {
 							sendResponse({ success: true });
 						}).catch((error) => {
-							console.error('Error opening Obsidian URL:', error);
+							console.error('Error opening URL:', error);
 							sendResponse({
 								success: false,
 								error: error instanceof Error ? error.message : String(error)

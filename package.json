@@ -1,9 +1,9 @@
 {
-	"name": "obsidian-clipper",
+	"name": "lazyreader-clipper",
 	"version": "1.8.0",
-	"description": "Official web clipper for Obsidian.",
+	"description": "Save the page you're on to LazyReader with one click, full article text included.",
 	"bin": {
-		"obsidian-clipper": "./dist/cli.cjs"
+		"lazyreader-clipper": "./dist/cli.cjs"
 	},
 	"files": [
 		"dist"

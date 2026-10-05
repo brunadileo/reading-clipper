@@ -161,8 +161,8 @@ export async function sendToLLM(promptContext: string, content: string, promptVa
 			};
 			headers = {
 				...headers,
-				'HTTP-Referer': 'https://obsidian.md/',
-				'X-Title': 'Obsidian Web Clipper',
+				'HTTP-Referer': 'https://lazyreader.app/',
+				'X-Title': 'LazyReader Clipper',
 				'Authorization': `Bearer ${provider.apiKey}`
 			};
 		} else if (provider.name.toLowerCase().includes('ollama')) {
@@ -192,8 +192,8 @@ export async function sendToLLM(promptContext: string, content: string, promptVa
 			};
 			headers = {
 				...headers,
-				'HTTP-Referer': 'https://obsidian.md/',
-				'X-Title': 'Obsidian Web Clipper',
+				'HTTP-Referer': 'https://lazyreader.app/',
+				'X-Title': 'LazyReader Clipper',
 				'Authorization': `Bearer ${provider.apiKey}`
 			};
 		}
@@ -214,7 +214,7 @@ export async function sendToLLM(promptContext: string, content: string, promptVa
 			if (provider.name.toLowerCase().includes('ollama') && response.status === 403) {
 				throw new Error(
 					`Ollama cannot process requests originating from a browser extension without setting OLLAMA_ORIGINS. ` +
-					`See instructions at https://help.obsidian.md/web-clipper/interpreter`
+					`See instructions at https://lazyreader.app`
 				);
 			}
 			

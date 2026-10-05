@@ -19,15 +19,15 @@ export async function exportHighlights(): Promise<void> {
 
 		const browserType = await detectBrowser();
 		const timestamp = dayjs().format('YYYYMMDDHHmm');
-		const fileName = `obsidian-web-clipper-highlights-${timestamp}.json`;
+		const fileName = `lazyreader-clipper-highlights-${timestamp}.json`;
 
 		if (browserType === 'safari' || browserType === 'mobile-safari') {
 			if (navigator.share) {
 				try {
 					await navigator.share({
 						files: [new File([blob], fileName, { type: 'application/json' })],
-						title: 'Exported Obsidian Web Clipper Highlights',
-						text: 'Here are your exported highlights from Obsidian Web Clipper.'
+						title: 'Exported LazyReader Clipper Highlights',
+						text: 'Here are your exported highlights from LazyReader Clipper.'
 					});
 				} catch (error) {
 					console.error('Error sharing:', error);
