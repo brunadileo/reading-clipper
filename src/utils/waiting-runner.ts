@@ -7,7 +7,7 @@ import { isSafeFetchUrl } from './full-text-check';
 import { isOwnPageSender } from './sync-schedule';
 import { ensureOffscreen, offscreenSupported, releaseOffscreen } from './offscreen-doc';
 import {
-	loadFinishState, runFinisher, saveFinishState, MAX_HTML_BYTES,
+	FINISH_ORIGINS, loadFinishState, runFinisher, saveFinishState, MAX_HTML_BYTES,
 	type FinisherDeps, type FinishTrigger,
 } from './waiting-finisher';
 
@@ -139,6 +139,10 @@ async function makeDeps(): Promise<FinisherDeps> {
 		store,
 		api: createWaitingApi(settings.captureUrl, settings.token),
 		hasToken: async () => !!(await loadReadingSettings()).token,
+		// Optional all-sites grant (store build). A missing grant skips the run quietly.
+		hasAccess: async () => {
+			try { return await browser.permissions.contains({ origins: FINISH_ORIGINS }); } catch { return false; }
+		},
 		fetchPage,
 		extractHtml: (html, url) => askOffscreen({ action: 'extractHtml', html, url }),
 		openForExtraction,

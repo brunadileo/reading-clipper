@@ -7,6 +7,7 @@ import { Settings } from './types/types';
 import { debugLog } from './utils/debug';
 import { incrementStat } from './utils/storage-utils';
 import { hasStoredHighlights } from './utils/url-utils';
+import { IS_STORE_BUILD } from './utils/store-build';
 import { initSyncRunner } from './utils/sync-runner';
 import { initWaitingRunner } from './utils/waiting-runner';
 import { postCapture, type ReadingSendResult } from './utils/reading-sender';
@@ -18,6 +19,7 @@ const YOUTUBE_INNERTUBE_RULE_ID = 9002;
 // Chrome: declarativeNetRequest to rewrite Referer on YouTube embeds.
 // Safari/Firefox use the native video element instead (see reader.ts).
 async function enableYouTubeEmbedRule(tabId: number): Promise<void> {
+	if (!chrome.declarativeNetRequest) return; // store build has no such permission
 	await chrome.declarativeNetRequest.updateSessionRules({
 		removeRuleIds: [YOUTUBE_EMBED_RULE_ID],
 		addRules: [{
@@ -41,6 +43,7 @@ async function enableYouTubeEmbedRule(tabId: number): Promise<void> {
 }
 
 async function disableYouTubeEmbedRule(): Promise<void> {
+	if (!chrome.declarativeNetRequest) return;
 	await chrome.declarativeNetRequest.updateSessionRules({
 		removeRuleIds: [YOUTUBE_EMBED_RULE_ID]
 	});
@@ -949,8 +952,11 @@ const debouncedUpdateContextMenu = debounce(async (tabId: number) => {
 				}
 			];
 
+		// Store build: the save entry only (highlighter, reader, side panel are cut).
+		if (IS_STORE_BUILD) menuItems.splice(1);
+
 		const browserType = await detectBrowser();
-		if (browserType === 'chrome') {
+		if (browserType === 'chrome' && !IS_STORE_BUILD) {
 			menuItems.push({
 				id: 'open-side-panel',
 				title: browser.i18n.getMessage('openSidePanel'),
@@ -1166,6 +1172,8 @@ async function injectReaderScript(tabId: number) {
 const validOpenBehaviors: Settings['openBehavior'][] = ['popup', 'embedded', 'reader'];
 
 function parseOpenBehavior(raw: string | undefined): Settings['openBehavior'] {
+	// The embedded frame and reader page are not in the store build.
+	if (IS_STORE_BUILD) return 'popup';
 	return validOpenBehaviors.includes(raw as Settings['openBehavior']) ? raw as Settings['openBehavior'] : 'popup';
 }
 

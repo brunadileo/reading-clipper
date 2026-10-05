@@ -6,6 +6,7 @@ import browser from '../utils/browser-polyfill';
 import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
+import { IS_STORE_BUILD } from '../utils/store-build';
 import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
 
 const ORIGINS: Record<SyncService, string[]> = {
@@ -163,13 +164,22 @@ function setupSchedule(): void {
 	void refreshSchedule();
 }
 
+// Instagram sync is not in the first store listing (READ-48 choice 5): its row
+// is hidden and the finisher row takes the second number.
+const SERVICES: SyncService[] = IS_STORE_BUILD ? ['substack'] : ['substack', 'instagram'];
+
 export function initializeSyncSettings(): void {
 	setupSchedule();
-	(['substack', 'instagram'] as SyncService[]).forEach(setupService);
+	if (IS_STORE_BUILD) {
+		(document.querySelector('.sync-service[data-service="instagram"]') as HTMLElement | null)?.style.setProperty('display', 'none');
+		const num = document.getElementById('finish-num');
+		if (num) num.textContent = '2';
+	}
+	SERVICES.forEach(setupService);
 	// Background runs change the saved state while this page is open.
 	browser.storage.onChanged.addListener((_changes, area) => {
 		if (area !== 'local') return;
 		void refreshSchedule();
-		(['substack', 'instagram'] as SyncService[]).forEach((s) => void refresh(s));
+		SERVICES.forEach((s) => void refresh(s));
 	});
 }

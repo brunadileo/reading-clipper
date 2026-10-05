@@ -96,11 +96,12 @@
 								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
 							</div>
 							<div class="lr-row sync-service" data-service="finish">
-								<span class="num">3</span>
+								<span class="num" id="finish-num">3</span>
 								<div class="main">
 									<div class="t">Finish waiting articles</div>
-									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what steps 1 and 2 just saved.</div>
+									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what the steps above just saved. Chrome asks once for access to the sites you save from.</div>
 									<div class="d" id="finish-status" role="status">Off</div>
+									<button class="lr-btn" id="finish-allow" type="button" hidden>Allow access</button>
 									<a class="lr-btn link" id="finish-open-list" hidden href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
@@ -124,7 +125,7 @@
 							<a class="lr-row lr-link" href="https://claude.ai/artifact/4bmMro9byWYAhX9HdmYwTM" target="_blank" rel="noopener"><div class="main"><div class="t">How the clipper works</div><div class="d">The setup guide, Chrome clipper tab.</div></div><span class="v">›</span></a>
 							<a class="lr-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">LazyReader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
 						</div>
-						<p class="hint">Built on the Obsidian Web Clipper (MIT licence).</p>
+						<p class="hint">Built on Obsidian Web Clipper (MIT License, Copyright 2024 Obsidian). Not affiliated with or endorsed by Obsidian.</p>
 					</section>
 
 				</div>

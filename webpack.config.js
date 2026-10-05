@@ -24,9 +24,13 @@ module.exports = (env, argv) => {
 	const isFirefox = env.BROWSER === 'firefox';
 	const isSafari = env.BROWSER === 'safari';
 	const isProduction = argv.mode === 'production';
+	// READ-48: STORE=1 builds the Chrome Web Store package (trimmed manifest, no
+	// key, no source maps, own zip name). The default build stays as it is.
+	const isStore = !!env.STORE && !isFirefox && !isSafari;
 
 	const getOutputDir = () => {
 		if (isProduction) {
+			if (isStore) return 'dist_store';
 			return isFirefox ? 'dist_firefox' : (isSafari ? 'dist_safari' : 'dist');
 		} else {
 			return isFirefox ? 'dev_firefox' : (isSafari ? 'dev_safari' : 'dev');
@@ -146,9 +150,13 @@ module.exports = (env, argv) => {
 				patterns: [
 					{ 
 						from: isFirefox ? "src/manifest.firefox.json" : 
-							  (isSafari ? "src/manifest.safari.json" : "src/manifest.chrome.json"), 
+							  (isSafari ? "src/manifest.safari.json" : (isStore ? "src/manifest.store.json" : "src/manifest.chrome.json")), 
 						to: "manifest.json" 
 					},
+					...(isStore ? [
+						{ from: "LICENSE", to: "LICENSE", toType: "file" },
+						{ from: "THIRD-PARTY.txt", to: "THIRD-PARTY.txt", toType: "file" }
+					] : []),
 					{ from: "src/popup.html", to: "popup.html" },
 					{ from: "src/offscreen.html", to: "offscreen.html" },
 					{ from: "src/side-panel.html", to: "side-panel.html" },
@@ -177,12 +185,15 @@ module.exports = (env, argv) => {
 			},
 			new webpack.DefinePlugin({
 				'process.env.NODE_ENV': JSON.stringify(argv.mode),
-				'DEBUG_MODE': JSON.stringify(!isProduction)
+				'DEBUG_MODE': JSON.stringify(!isProduction),
+				'STORE_BUILD': JSON.stringify(isStore)
 			}),
 			...(isProduction ? [
 				new ZipPlugin({
 					path: path.resolve(__dirname, 'builds'),
-					filename: `obsidian-web-clipper-${package.version}-${browserName}.zip`,
+					filename: isStore
+						? `lazyreader-clipper-${package.version}-chrome.zip`
+						: `obsidian-web-clipper-${package.version}-${browserName}.zip`,
 				})
 			] : [])
 		]
