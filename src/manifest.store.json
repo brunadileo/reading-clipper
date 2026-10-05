@@ -43,8 +43,7 @@
 		{
 			"matches": ["https://lazyreader.app/*"],
 			"js": ["lazyreader-relay.js"],
-			"run_at": "document_start",
-			"all_frames": true
+			"run_at": "document_start"
 		}
 	],
 	"web_accessible_resources": [

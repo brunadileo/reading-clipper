@@ -136,6 +136,21 @@ export async function postCapture(
 }
 
 /**
+ * The background's save path (READ-233): one POST with the stored token. A
+ * missing or rejected token comes back as 'not-connected' with no retry and no
+ * lookup; the popup and Settings offer "Sign in with LazyReader".
+ */
+export async function captureWithToken(
+	body: ReadingCaptureBody,
+	captureUrl: string,
+	token: string | undefined,
+	fetchFn: typeof fetch = fetch
+): Promise<ReadingSendResult> {
+	const result = token ? await postCapture(body, captureUrl, token, fetchFn) : ({ ok: false, status: 401 } as ReadingSendResult);
+	return result.status === 401 ? { ok: false, status: 401, error: 'not-connected' } : result;
+}
+
+/**
  * Ask the background worker to POST the body to Reading's capture URL.
  * Never logs the token; only the background worker sees it, in the request
  * header it sends.

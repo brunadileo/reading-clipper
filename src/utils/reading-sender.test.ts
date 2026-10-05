@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { buildReadingCaptureBody, postCapture, fitReadingText, MAX_READING_TEXT_BYTES, READING_TEXT_CUT_NOTE } from './reading-sender';
+import { describe, it, expect, vi } from 'vitest';
+import { buildReadingCaptureBody, captureWithToken, postCapture, fitReadingText, MAX_READING_TEXT_BYTES, READING_TEXT_CUT_NOTE } from './reading-sender';
 
 describe('buildReadingCaptureBody', () => {
 	it('maps title and site name, keeps url and lane as given', () => {
@@ -140,5 +140,32 @@ describe('source and postCapture', () => {
 		expect(r).toMatchObject({ ok: true, status: 200, data: { id: 'abc' } });
 		expect(seen.init.headers['x-reader-token']).toBe('secret-token');
 		expect(await postCapture({ url: 'u', lane: 'l', title: '', site_name: '' }, 'https://cap.test', '')).toMatchObject({ ok: false, status: 401 });
+	});
+});
+
+describe('captureWithToken (no silent reconnect)', () => {
+	const body = { url: 'https://example.com/a', lane: 'Read later', title: 'T', site_name: 'example.com' };
+	// Anything that could open a tab or read a session would go through these.
+	const tabsCreate = vi.fn();
+	(globalThis as any).chrome = { tabs: { create: tabsCreate }, scripting: { executeScript: vi.fn() } };
+
+	it('no token: not-connected, no request, no tab', async () => {
+		const fetchFn = vi.fn();
+		const r = await captureWithToken(body, 'https://lazyreader.app/api/capture', undefined, fetchFn as any);
+		expect(r).toEqual({ ok: false, status: 401, error: 'not-connected' });
+		expect(fetchFn).not.toHaveBeenCalled();
+		expect(tabsCreate).not.toHaveBeenCalled();
+	});
+	it('a 401 from the server: not-connected after exactly one request, no tab', async () => {
+		const fetchFn = vi.fn(async () => new Response('{"error":"Unauthorized"}', { status: 401 }));
+		const r = await captureWithToken(body, 'https://lazyreader.app/api/capture', 'a1b2c3d4e5f60718293a4b5c', fetchFn as any);
+		expect(r).toEqual({ ok: false, status: 401, error: 'not-connected' });
+		expect(fetchFn).toHaveBeenCalledTimes(1);
+		expect(tabsCreate).not.toHaveBeenCalled();
+	});
+	it('a good save passes through', async () => {
+		const fetchFn = vi.fn(async () => new Response('{"id":"x"}', { status: 200 }));
+		const r = await captureWithToken(body, 'https://lazyreader.app/api/capture', 'a1b2c3d4e5f60718293a4b5c', fetchFn as any);
+		expect(r.ok).toBe(true);
 	});
 });

@@ -26,14 +26,15 @@
 
 					<section id="connection-section" class="settings-section lr-pane">
 						<h2 class="lr-h2">Connection</h2>
-						<p class="lr-sub">Where your saves go. The clipper uses your LazyReader sign-in in this Chrome, so there is nothing to paste.</p>
+						<p class="lr-sub">Where your saves go. Sign in with LazyReader and press Connect this browser on lazyreader.app, so there is nothing to paste.</p>
 						<div class="lr-status" id="connection-status" role="status" data-state="disconnected">
 							<span class="lr-pip" id="connection-pip"></span>
 							<div class="main">
 								<div class="t" id="connection-state">Checking connection</div>
 								<div class="hint" id="connection-hint"></div>
 							</div>
-							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in</button>
+							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in with LazyReader</button>
+							<button type="button" class="lr-btn" id="connection-disconnect" hidden>Disconnect</button>
 						</div>
 						<details class="lr-details" id="connection-advanced">
 							<summary>Advanced: server address and token</summary>
@@ -45,7 +46,7 @@
 							<div class="lr-field">
 								<label for="reading-token-input">Token</label>
 								<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" placeholder="None yet" />
-								<span class="hint">Filled in by itself from your sign-in.</span>
+								<span class="hint">Filled in when you connect. You can also paste the token from LazyReader Settings.</span>
 							</div>
 							<button type="button" class="lr-btn" id="reading-reset-default">Reset to default</button>
 						</details>

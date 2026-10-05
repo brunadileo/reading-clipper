@@ -5,13 +5,13 @@ import { TextHighlightData } from './utils/highlighter';
 import { debounce } from './utils/debounce';
 import { Settings } from './types/types';
 import { debugLog } from './utils/debug';
-import { incrementStat } from './utils/storage-utils';
+import { incrementStat, saveReadingSettings } from './utils/storage-utils';
 import { hasStoredHighlights } from './utils/url-utils';
 import { IS_STORE_BUILD } from './utils/store-build';
 import { initSyncRunner } from './utils/sync-runner';
 import { initWaitingRunner } from './utils/waiting-runner';
-import { postCapture, type ReadingSendResult } from './utils/reading-sender';
-import { acceptFrameSession, LAZYREADER_ORIGIN, refreshReadingToken } from './utils/reading-token';
+import { captureWithToken } from './utils/reading-sender';
+import { acceptConnect } from './utils/reading-token';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -816,39 +816,27 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 				return true;
 			}
 
-			// No token, or a rejected one: fetch the current token through the
-			// user's LazyReader session and try once more.
-			(async () => {
-				let result = token ? await postCapture(body, captureUrl, token) : { ok: false, status: 401 } as ReadingSendResult;
-				if (result.status === 401) {
-					const fresh = await refreshReadingToken();
-					if (fresh) {
-						result = await postCapture(body, captureUrl, fresh);
-					} else {
-						result = { ok: false, status: 401, error: 'not-signed-in' };
-					}
-				}
-				sendResponse(result);
-			})().catch((error) => {
+			// No token, or a rejected one: 'not-connected'. The user connects from
+			// the popup or Settings; nothing is retried or looked up on the side.
+			captureWithToken(body, captureUrl, token).then(sendResponse).catch((error) => {
 				sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) });
 			});
 			return true;
 		}
 
-		// The lazyreader.app relay asks for this on every page load, so a
-		// regenerated token reaches the clipper without a paste.
-		if (typedRequest.action === "refreshReadingToken") {
-			const tab = sender.tab;
-			if (tab?.id === undefined || !tab.url?.startsWith(LAZYREADER_ORIGIN + '/')) return undefined;
-			refreshReadingToken(tab.id).then((t) => sendResponse({ ok: !!t })).catch(() => sendResponse({ ok: false }));
+		// READ-233: the user pressed "Connect this browser" on lazyreader.app;
+		// the relay forwards the token. Only the relay in a lazyreader.app top
+		// frame is believed (acceptConnect).
+		if (typedRequest.action === "connectClipper") {
+			const connectToken = (request as any).token;
+			if (!acceptConnect(sender, connectToken, browser.runtime.id)) {
+				sendResponse({ ok: false });
+				return true;
+			}
+			saveReadingSettings({ token: connectToken })
+				.then(() => sendResponse({ ok: true }))
+				.catch(() => sendResponse({ ok: false }));
 			return true;
-		}
-
-		// The hidden lazyreader.app frame in the offscreen document reports its
-		// session; taken only while a token lookup is waiting for it.
-		if (typedRequest.action === "lazyreaderFrameSession") {
-			acceptFrameSession(sender, (request as any).accessToken);
-			return undefined;
 		}
 
 		// For other actions that use sendResponse
@@ -998,8 +986,12 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 	}
 });
 
-browser.runtime.onInstalled.addListener(() => {
+browser.runtime.onInstalled.addListener((details) => {
 	debouncedUpdateContextMenu(-1); // Use a dummy tabId for initial creation
+	// READ-233: first run opens Settings > Connection once, so the user can sign in.
+	if (details.reason === 'install') {
+		browser.tabs.create({ url: browser.runtime.getURL('settings.html#connection') }).catch(() => {});
+	}
 });
 
 async function isSidePanelOpen(windowId: number): Promise<boolean> {

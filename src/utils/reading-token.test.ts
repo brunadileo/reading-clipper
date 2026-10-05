@@ -1,175 +1,92 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { acceptConnect, isPlausibleToken, parseConnectMessage, CONNECT_MESSAGE_TYPE } from './reading-token';
 
-const stored = { token: '' };
-const tabs: { id: number; url: string }[] = [];
-const sessions = new Map<number, string | null>();
-const created: number[] = [];
-const removed: number[] = [];
-
-vi.mock('./browser-polyfill', () => ({
-	default: {
-		scripting: {
-			executeScript: async ({ target }: { target: { tabId: number } }) => [{ result: sessions.get(target.tabId) ?? null }],
-		},
-		tabs: {
-			query: async () => tabs,
-			create: async () => {
-				const id = 99;
-				created.push(id);
-				return { id };
-			},
-			remove: async (id: number) => {
-				removed.push(id);
-			},
-			onUpdated: {
-				addListener: (fn: (id: number, info: { status: string }) => void) => setTimeout(() => fn(99, { status: 'complete' }), 0),
-				removeListener: () => {},
-			},
-		},
-	},
-}));
-
-const offscreen = { supported: false, ensured: [] as string[], released: [] as string[] };
-vi.mock('./offscreen-doc', () => ({
-	offscreenSupported: () => offscreen.supported,
-	ensureOffscreen: async (h: string) => { offscreen.ensured.push(h); },
-	releaseOffscreen: async (h: string) => { offscreen.released.push(h); },
-}));
-
-// What the relay inside the hidden frame reports after openLazyReaderFrame:
-// a session, null (signed out or partitioned storage), or nothing at all.
-let frameReport: { session: string | null } | 'silent' = 'silent';
-const offscreenMessages: string[] = [];
-const frameSender = { url: 'https://lazyreader.app/#lazyreader-clipper-session' };
-(globalThis as any).chrome = {
-	runtime: {
-		sendMessage: async (msg: { action: string }) => {
-			offscreenMessages.push(msg.action);
-			if (msg.action === 'openLazyReaderFrame' && frameReport !== 'silent') {
-				const report = frameReport;
-				setTimeout(() => acceptFrameSession(frameSender, report.session), 0);
-			}
-			return { ok: true };
-		},
-	},
-};
-
-vi.mock('./storage-utils', () => ({
-	loadReadingSettings: async () => ({ captureUrl: 'x', token: stored.token }),
-	saveReadingSettings: async (s: { token?: string }) => {
-		if (s.token !== undefined) stored.token = s.token;
-	},
-}));
-
-import { acceptFrameSession, FRAME_TIMEOUT_MS, refreshReadingToken } from './reading-token';
-
-function profileFetch(token: string | null, status = 200) {
-	return vi.fn(async (_url: string, init: RequestInit) => {
-		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer session-1');
-		return new Response(JSON.stringify(token ? { capture_token: token } : { error: 'Unauthorized' }), { status });
-	}) as unknown as typeof fetch;
-}
-
-beforeEach(() => {
-	stored.token = '';
-	tabs.length = 0;
-	sessions.clear();
-	created.length = 0;
-	removed.length = 0;
-	offscreen.supported = false;
-	offscreen.ensured.length = 0;
-	offscreen.released.length = 0;
-	offscreenMessages.length = 0;
-	frameReport = 'silent';
-	vi.useRealTimers();
+const GOOD = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718';
+const ID = 'ext-id-1';
+const sender = (over: Record<string, unknown> = {}) => ({
+	id: ID,
+	tab: { id: 3 },
+	frameId: 0,
+	url: 'https://lazyreader.app/connect/clipper',
+	...over,
 });
 
-describe('refreshReadingToken', () => {
-	it('reads the session from an open lazyreader.app tab and stores the token', async () => {
-		tabs.push({ id: 5, url: 'https://lazyreader.app/settings' });
-		sessions.set(5, 'session-1');
-		const token = await refreshReadingToken(undefined, profileFetch('tok-new'));
-		expect(token).toBe('tok-new');
-		expect(stored.token).toBe('tok-new');
-		expect(created).toEqual([]);
+describe('isPlausibleToken', () => {
+	it('takes 16 to 256 characters without whitespace', () => {
+		expect(isPlausibleToken(GOOD)).toBe(true);
+		expect(isPlausibleToken('x'.repeat(16))).toBe(true);
+		expect(isPlausibleToken('x'.repeat(256))).toBe(true);
 	});
-
-	it('opens a background tab when none is open, and closes it', async () => {
-		sessions.set(99, 'session-1');
-		const token = await refreshReadingToken(undefined, profileFetch('tok-bg'));
-		expect(token).toBe('tok-bg');
-		expect(created).toEqual([99]);
-		expect(removed).toEqual([99]);
-	}, 10000);
-
-	it('returns null and keeps the old token when not signed in', async () => {
-		stored.token = 'old';
-		tabs.push({ id: 5, url: 'https://lazyreader.app/' });
-		sessions.set(5, null);
-		const token = await refreshReadingToken(5, profileFetch('never'));
-		expect(token).toBeNull();
-		expect(stored.token).toBe('old');
-	});
-
-	it('returns null when getMyProfile rejects the session', async () => {
-		tabs.push({ id: 5, url: 'https://lazyreader.app/' });
-		sessions.set(5, 'session-1');
-		const token = await refreshReadingToken(5, profileFetch(null, 401));
-		expect(token).toBeNull();
-		expect(stored.token).toBe('');
-	});
-
-	it('reads the session from a hidden offscreen frame before opening a tab', async () => {
-		offscreen.supported = true;
-		frameReport = { session: 'session-1' };
-		const token = await refreshReadingToken(undefined, profileFetch('tok-frame'));
-		expect(token).toBe('tok-frame');
-		expect(created).toEqual([]);
-		expect(offscreenMessages).toEqual(['openLazyReaderFrame', 'closeLazyReaderFrame']);
-		expect(offscreen.ensured).toEqual(['token']);
-		expect(offscreen.released).toEqual(['token']);
-	});
-
-	it('falls back to the background tab when the frame has no session', async () => {
-		offscreen.supported = true;
-		frameReport = { session: null };
-		sessions.set(99, 'session-1');
-		const token = await refreshReadingToken(undefined, profileFetch('tok-bg'));
-		expect(token).toBe('tok-bg');
-		expect(created).toEqual([99]);
-		expect(offscreen.released).toEqual(['token']);
-	}, 10000);
-
-	it('gives up on a silent frame after the timeout and falls back', async () => {
-		vi.useFakeTimers();
-		offscreen.supported = true;
-		sessions.set(99, 'session-1');
-		const pending = refreshReadingToken(undefined, profileFetch('tok-bg'));
-		await vi.advanceTimersByTimeAsync(FRAME_TIMEOUT_MS - 1);
-		expect(created).toEqual([]);
-		await vi.advanceTimersByTimeAsync(5000);
-		expect(await pending).toBe('tok-bg');
-		expect(created).toEqual([99]);
-		expect(offscreenMessages).toEqual(['openLazyReaderFrame', 'closeLazyReaderFrame']);
+	it('refuses other shapes', () => {
+		expect(isPlausibleToken('x'.repeat(15))).toBe(false);
+		expect(isPlausibleToken('x'.repeat(257))).toBe(false);
+		expect(isPlausibleToken('abc def ghi jkl mno pqr')).toBe(false);
+		expect(isPlausibleToken(`${GOOD}\n`)).toBe(false);
+		expect(isPlausibleToken(12345678901234567890)).toBe(false);
+		expect(isPlausibleToken(null)).toBe(false);
+		expect(isPlausibleToken(undefined)).toBe(false);
+		expect(isPlausibleToken({})).toBe(false);
 	});
 });
 
-describe('acceptFrameSession', () => {
-	it('ignores reports when no lookup is waiting', () => {
-		expect(acceptFrameSession(frameSender, 'session-1')).toBe(false);
+describe('acceptConnect', () => {
+	it('accepts the relay in a lazyreader.app top frame', () => {
+		expect(acceptConnect(sender(), GOOD, ID)).toBe(true);
 	});
+	it('refuses a wrong origin', () => {
+		expect(acceptConnect(sender({ url: 'https://evil.example/' }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(sender({ url: 'https://lazyreader.app.evil.example/' }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(sender({ url: 'http://lazyreader.app/' }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(sender({ url: undefined }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(sender({ url: 'not a url' }), GOOD, ID)).toBe(false);
+	});
+	it('refuses a subframe', () => {
+		expect(acceptConnect(sender({ frameId: 4 }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(sender({ frameId: undefined }), GOOD, ID)).toBe(false);
+	});
+	it('refuses a sender with no tab (offscreen page, popup)', () => {
+		expect(acceptConnect(sender({ tab: undefined }), GOOD, ID)).toBe(false);
+	});
+	it('refuses a foreign extension id', () => {
+		expect(acceptConnect(sender({ id: 'other-ext' }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(sender({ id: undefined }), GOOD, ID)).toBe(false);
+		expect(acceptConnect(undefined, GOOD, ID)).toBe(false);
+	});
+	it('refuses bad token shapes', () => {
+		expect(acceptConnect(sender(), '', ID)).toBe(false);
+		expect(acceptConnect(sender(), 'short', ID)).toBe(false);
+		expect(acceptConnect(sender(), 'has some spaces in the token', ID)).toBe(false);
+		expect(acceptConnect(sender(), 42, ID)).toBe(false);
+		expect(acceptConnect(sender(), undefined, ID)).toBe(false);
+	});
+});
 
-	it('ignores reports from a tab or another origin while a lookup waits', async () => {
-		vi.useFakeTimers();
-		offscreen.supported = true;
-		sessions.set(99, 'session-1');
-		const pending = refreshReadingToken(undefined, profileFetch('tok-bg'));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(acceptFrameSession({ ...frameSender, tab: { id: 3 } }, 'session-1')).toBe(false);
-		expect(acceptFrameSession({ url: 'https://evil.example/' }, 'session-1')).toBe(false);
-		expect(acceptFrameSession({ url: 'https://lazyreader.app.evil.example/' }, 'session-1')).toBe(false);
-		expect(acceptFrameSession(frameSender, 'session-1')).toBe(true);
-		expect(await pending).toBe('tok-bg');
-		expect(created).toEqual([]);
+describe('parseConnectMessage (relay filter)', () => {
+	const win = {};
+	const msg = (over: Record<string, unknown> = {}) => ({
+		origin: 'https://lazyreader.app',
+		source: win,
+		data: { type: CONNECT_MESSAGE_TYPE, token: GOOD },
+		...over,
+	});
+	it('returns the token for the page itself', () => {
+		expect(parseConnectMessage(msg(), win)).toBe(GOOD);
+	});
+	it('ignores a wrong origin', () => {
+		expect(parseConnectMessage(msg({ origin: 'https://evil.example' }), win)).toBeNull();
+		expect(parseConnectMessage(msg({ origin: 'null' }), win)).toBeNull();
+	});
+	it('ignores a foreign source window', () => {
+		expect(parseConnectMessage(msg({ source: {} }), win)).toBeNull();
+		expect(parseConnectMessage(msg({ source: null }), win)).toBeNull();
+	});
+	it('ignores a wrong type or missing data', () => {
+		expect(parseConnectMessage(msg({ data: { type: 'lazyreader:finish-now', token: GOOD } }), win)).toBeNull();
+		expect(parseConnectMessage(msg({ data: null }), win)).toBeNull();
+		expect(parseConnectMessage(msg({ data: 'text' }), win)).toBeNull();
+	});
+	it('ignores a bad token', () => {
+		expect(parseConnectMessage(msg({ data: { type: CONNECT_MESSAGE_TYPE, token: 'short' } }), win)).toBeNull();
+		expect(parseConnectMessage(msg({ data: { type: CONNECT_MESSAGE_TYPE } }), win)).toBeNull();
 	});
 });
