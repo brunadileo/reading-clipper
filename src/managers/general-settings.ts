@@ -369,7 +369,7 @@ async function initializeKeyboardShortcuts(): Promise<void> {
 	if (browserName === 'mobile-safari') {
 		// For Safari, display a message about keyboard shortcuts not being available
 		const messageItem = document.createElement('div');
-		messageItem.className = 'lr-row';
+		messageItem.className = 'lrs-row';
 		messageItem.textContent = getMessage('shortcutInstructionsSafari');
 		shortcutsList.appendChild(messageItem);
 		if (changeBtn) changeBtn.hidden = true;
@@ -409,7 +409,7 @@ async function initializeKeyboardShortcuts(): Promise<void> {
 			if (!command) return;
 			const row = SHORTCUT_ROWS[name];
 
-			const item = createElementWithClass('div', 'lr-row shortcut-item');
+			const item = createElementWithClass('div', 'lrs-row shortcut-item');
 			const main = createElementWithClass('div', 'main');
 			const title = createElementWithClass('div', 't');
 			title.textContent = row.label;

@@ -268,7 +268,7 @@
 		border-top: 1px solid var(--lr-border);
 	}
 
-	.lr-row {
+	.lrs-row {
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -302,12 +302,12 @@
 			white-space: nowrap;
 		}
 
-		.lr-btn.link {
+		.lrs-btn.link {
 			margin-top: 4px;
 		}
 	}
 
-	a.lr-row {
+	a.lrs-row {
 		color: inherit;
 		text-decoration: none;
 
@@ -353,7 +353,7 @@
 	}
 
 	// --- buttons, fields ------------------------------------------------
-	.lr-btn {
+	.lrs-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -405,7 +405,7 @@
 		}
 	}
 
-	.lr-field {
+	.lrs-field {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
@@ -436,7 +436,7 @@
 		}
 	}
 
-	.lr-select {
+	.lrs-select {
 		width: auto;
 		height: auto;
 		min-height: 40px;
@@ -459,7 +459,7 @@
 		flex-wrap: wrap;
 		margin: 0 0 8px;
 
-		.lr-field {
+		.lrs-field {
 			margin: 0;
 		}
 	}

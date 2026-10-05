@@ -33,22 +33,22 @@
 								<div class="t" id="connection-state">Checking connection</div>
 								<div class="hint" id="connection-hint"></div>
 							</div>
-							<button type="button" class="lr-btn" id="connection-action" hidden>Sign in with Lazy Reader</button>
-							<button type="button" class="lr-btn" id="connection-disconnect" hidden>Disconnect</button>
+							<button type="button" class="lrs-btn" id="connection-action" hidden>Sign in with Lazy Reader</button>
+							<button type="button" class="lrs-btn" id="connection-disconnect" hidden>Disconnect</button>
 						</div>
 						<details class="lr-details" id="connection-advanced">
 							<summary>Advanced: server address and token</summary>
 							<p class="hint lr-advanced-note">Only change these if Lazy Reader support asks you to.</p>
-							<div class="lr-field">
+							<div class="lrs-field">
 								<label for="reading-capture-url-input">Server address</label>
 								<input type="text" id="reading-capture-url-input" autocomplete="off" spellcheck="false" />
 							</div>
-							<div class="lr-field">
+							<div class="lrs-field">
 								<label for="reading-token-input">Token</label>
 								<input type="password" id="reading-token-input" autocomplete="off" spellcheck="false" placeholder="None yet" />
 								<span class="hint">Filled in when you connect. You can also paste the token from Lazy Reader Settings.</span>
 							</div>
-							<button type="button" class="lr-btn" id="reading-reset-default">Reset to default</button>
+							<button type="button" class="lrs-btn" id="reading-reset-default">Reset to default</button>
 						</details>
 					</section>
 
@@ -56,9 +56,9 @@
 						<h2 class="lr-h2">Sync</h2>
 						<p class="lr-sub">Brings posts you saved on other sites into Lazy Reader, using your own logins in this Chrome. Your logins never reach Lazy Reader.</p>
 						<div class="lr-sched sync-service" data-service="schedule">
-							<div class="lr-field">
+							<div class="lrs-field">
 								<label for="sync-frequency">How often</label>
-								<select class="lr-select" id="sync-frequency">
+								<select class="lrs-select" id="sync-frequency">
 									<option value="hourly">Every hour</option>
 									<option value="every3h">Every 3 hours</option>
 									<option value="twiceDaily" selected>Twice a day</option>
@@ -66,7 +66,7 @@
 									<option value="manual">Only when I press Sync now</option>
 								</select>
 							</div>
-							<button class="lr-btn" id="sync-all-now" type="button">Sync now</button>
+							<button class="lrs-btn" id="sync-all-now" type="button">Sync now</button>
 						</div>
 						<p class="hint lr-tight" id="sync-frequency-hint">Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.</p>
 						<div class="lr-status">
@@ -76,34 +76,34 @@
 						<h3 class="lr-h3">Runs in this order</h3>
 						<p class="hint lr-tight">One after the other, never at the same time.</p>
 						<div class="lr-group">
-							<div class="lr-row sync-service" data-service="substack">
+							<div class="lrs-row sync-service" data-service="substack">
 								<span class="num">1</span>
 								<div class="main">
 									<div class="t">Substack <span class="lr-tag">Experimental</span></div>
 									<div class="d">Your newest saves, every sync. The first run takes your newest 100.</div>
 									<div class="d" id="sync-substack-status" role="status">Off</div>
-									<button class="lr-btn link" id="sync-substack-older" type="button" hidden>Load 100 older saves</button>
+									<button class="lrs-btn link" id="sync-substack-older" type="button" hidden>Load 100 older saves</button>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="sync-substack-toggle" role="switch" aria-label="Substack sync" /></div>
 							</div>
-							<div class="lr-row sync-service" data-service="instagram">
+							<div class="lrs-row sync-service" data-service="instagram">
 								<span class="num">2</span>
 								<div class="main">
 									<div class="t">Instagram <span class="lr-tag">Experimental</span></div>
 									<div class="d">Saved posts, at most once an hour. Instagram can restrict accounts that use automated tools, so turn it on at your own risk. Needs your SociaVault key in Lazy Reader Settings.</div>
 									<div class="d" id="sync-instagram-status" role="status">Off</div>
-									<button class="lr-btn link" id="sync-instagram-older" type="button" hidden>Load 100 older saves</button>
+									<button class="lrs-btn link" id="sync-instagram-older" type="button" hidden>Load 100 older saves</button>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
 							</div>
-							<div class="lr-row sync-service" data-service="finish">
+							<div class="lrs-row sync-service" data-service="finish">
 								<span class="num" id="finish-num">3</span>
 								<div class="main">
 									<div class="t">Finish waiting articles</div>
 									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what the steps above just saved. Chrome asks once for access to the sites you save from.</div>
 									<div class="d" id="finish-status" role="status">Off</div>
-									<button class="lr-btn" id="finish-allow" type="button" hidden>Allow access</button>
-									<a class="lr-btn link" id="finish-open-list" hidden href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
+									<button class="lrs-btn" id="finish-allow" type="button" hidden>Allow access</button>
+									<a class="lrs-btn link" id="finish-open-list" hidden href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
 							</div>
@@ -115,7 +115,7 @@
 						<h2 class="lr-h2">Shortcuts</h2>
 						<p class="lr-sub">Keyboard shortcuts for the clipper.</p>
 						<div class="lr-group" id="keyboard-shortcuts-list"></div>
-						<button type="button" class="lr-btn" id="shortcuts-change">Change in Chrome</button>
+						<button type="button" class="lrs-btn" id="shortcuts-change">Change in Chrome</button>
 						<p class="hint" id="shortcuts-hint">Opens chrome://extensions/shortcuts, where Chrome keeps every extension's keys.</p>
 					</section>
 
@@ -123,8 +123,8 @@
 						<h2 class="lr-h2">About</h2>
 						<p class="lr-sub">Lazy Reader Clipper, version <span id="version-number"></span>.</p>
 						<div class="lr-group">
-							<a class="lr-row lr-link" href="https://claude.ai/artifact/4bmMro9byWYAhX9HdmYwTM" target="_blank" rel="noopener"><div class="main"><div class="t">How the clipper works</div><div class="d">The setup guide, Chrome clipper tab.</div></div><span class="v">›</span></a>
-							<a class="lr-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">Lazy Reader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
+							<a class="lrs-row lr-link" href="https://claude.ai/artifact/4bmMro9byWYAhX9HdmYwTM" target="_blank" rel="noopener"><div class="main"><div class="t">How the clipper works</div><div class="d">The setup guide, Chrome clipper tab.</div></div><span class="v">›</span></a>
+							<a class="lrs-row lr-link" href="https://lazyreader.app/privacy" target="_blank" rel="noopener"><div class="main"><div class="t">Lazy Reader privacy</div><div class="d">What the clipper reads and what it sends.</div></div><span class="v">›</span></a>
 						</div>
 						<p class="hint">Built on Obsidian Web Clipper (MIT License, Copyright 2024 Obsidian). Not affiliated with or endorsed by Obsidian.</p>
 					</section>
