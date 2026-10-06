@@ -54,6 +54,22 @@ export function describeSyncStatus(service: SyncService, s: SyncState, now: numb
 	return `Last synced ${ago}${s.lastResult ? ` (${s.lastResult})` : ''}`;
 }
 
+/**
+ * Pure: the cost question shown after Chrome grants site access, or null when
+ * the service needs none. Medium: up to 100 summaries on the user's own key
+ * (READ-36 choice 12). The first Instagram run is the costly one. YouTube asks
+ * only while it has never run.
+ */
+export function switchOnQuestion(service: SyncService, youtubeNeverRan: boolean): string | null {
+	if (service === 'medium') return `${MEDIUM_COST_WARNING}\n\nTurn Medium on?`;
+	if (service === 'instagram') {
+		const warning = creditWarning(IG_FIRST_RUN_POSTS);
+		return warning ? `${warning}\n\nUp to ${IG_FIRST_RUN_POSTS} posts on the first sync. Turn Instagram on?` : null;
+	}
+	if (service === 'youtube' && youtubeNeverRan) return `${costWarning(FIRST_RUN_VIDEOS)}\n\nTurn YouTube on?`;
+	return null;
+}
+
 // Read inside the click that turns YouTube on, where nothing can be awaited first.
 let youtubeNeverRan = true;
 let youtubeSavedPlaylist: string | null = null;
@@ -118,24 +134,9 @@ function setupService(service: SyncService): void {
 
 	toggle.addEventListener('change', () => {
 		const wantOn = toggle.checked;
-		// Medium: up to 100 summaries on the user's own key (READ-36 choice 12).
-		if (wantOn && service === 'medium' && !window.confirm(`${MEDIUM_COST_WARNING}\n\nTurn Medium on?`)) {
-			toggle.checked = false;
-			return;
-		}
-		// The first Instagram run is the costly one, and it now happens on the schedule.
-		if (wantOn && service === 'instagram') {
-			const warning = creditWarning(IG_FIRST_RUN_POSTS);
-			if (warning && !window.confirm(`${warning}\n\nUp to ${IG_FIRST_RUN_POSTS} posts on the first sync. Turn Instagram on?`)) {
-				toggle.checked = false;
-				return;
-			}
-		}
-		// permissions.request has to run inside the click, before any await.
-		if (wantOn && service === 'youtube' && youtubeNeverRan && !window.confirm(`${costWarning(FIRST_RUN_VIDEOS)}\n\nTurn YouTube on?`)) {
-			toggle.checked = false;
-			return;
-		}
+		// permissions.request has to run inside the click, before any await or confirm:
+		// Chrome's user activation lasts about 5 s (READ-250 choice 3). The cost
+		// question comes after the grant.
 		const permissions = PERMISSIONS[service];
 		const granted: Promise<boolean> = wantOn
 			? browser.permissions.request({ origins: ORIGINS[service], ...(permissions ? { permissions } : {}) } as any).catch(() => false)
@@ -149,6 +150,14 @@ function setupService(service: SyncService): void {
 						: `${NAMES[service]} sync needs access to ${NAMES[service]}'s site. It stays off.`;
 				}
 				return;
+			}
+			if (wantOn) {
+				const question = switchOnQuestion(service, youtubeNeverRan);
+				// Declined: back off without enabling (the granted permission stays, harmlessly).
+				if (question && !window.confirm(question)) {
+					toggle.checked = false;
+					return;
+				}
 			}
 			await browser.runtime.sendMessage({ action: 'syncSetEnabled', service, enabled: wantOn });
 			await refresh(service);
@@ -179,10 +188,10 @@ function setupService(service: SyncService): void {
 	});
 
 	if (service === 'youtube') setupYoutubeExtras(status);
-	// Medium's own Sync button: Medium alone, button-only.
+	// Each row's own Sync button: that service alone, then the finish job.
 	const run = document.getElementById(`sync-${service}-run`) as HTMLButtonElement | null;
 	run?.addEventListener('click', async () => {
-		if (!window.confirm(`${MEDIUM_COST_WARNING}\n\nSync Medium now?`)) return;
+		if (service === 'medium' && !window.confirm(`${MEDIUM_COST_WARNING}\n\nSync Medium now?`)) return;
 		run.disabled = true;
 		if (status) status.textContent = 'Syncing...';
 		try {
