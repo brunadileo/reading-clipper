@@ -7,6 +7,7 @@ import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
 import { fitReadingText } from './reading-sender';
 import type { ProvideResult, WaitingApi, WaitingItem } from './waiting-api';
 import { countWords, type SyncStore } from './sync-core';
+import type { TranscriptRead } from './youtube-sync';
 
 export const FINISH_KEY = 'finish:waiting';
 export const AUTO_MIN_GAP_MS = 10 * 60 * 1000;
@@ -73,6 +74,9 @@ export interface FinisherDeps {
 	extractHtml: (html: string, url: string) => Promise<string>;
 	// Fallback B (minimized window). Returns text, or null when it could not open the page.
 	openForExtraction?: (url: string) => Promise<string | null>;
+	// READ-38: reads a YouTube video's transcript in the browser (no window, no tab).
+	// Omitted: needs_transcript items are left for the phone.
+	readTranscript?: (videoId: string) => Promise<TranscriptRead>;
 	sleep: (ms: number) => Promise<void>;
 	now: () => number;
 	random?: () => number;
@@ -84,6 +88,10 @@ export interface FinishResult {
 	membersOnly: number;
 	unreadable: number;
 	retryLater: number;
+	// needs_transcript items given up on after MAX_ITEM_ATTEMPTS: they stay waiting, never marked unreadable.
+	transcriptsStuck: number;
+	// YouTube answered 429 or a bot check: no more transcript reads this run.
+	transcriptsBlocked: boolean;
 	stopped: 'token' | 'rate-limited' | 'error' | null;
 }
 
@@ -125,6 +133,18 @@ function guard(r: { ok: boolean; status?: number; error?: string }): void {
 	if ((r.status ?? 0) >= 500 || (!r.ok && r.status === undefined)) throw new StopRun('error', r.error || 'Lazy Reader could not be reached. Next run retries.');
 }
 
+/** Video id of a watch link on youtube.com, or null. */
+export function youtubeVideoId(url: string): string | null {
+	try {
+		const u = new URL(url);
+		if (u.protocol !== 'https:' || (u.hostname !== 'youtube.com' && !u.hostname.endsWith('.youtube.com'))) return null;
+		const id = u.searchParams.get('v') ?? '';
+		return /^[\w-]{6,20}$/.test(id) ? id : null;
+	} catch {
+		return null;
+	}
+}
+
 /** Text for one item: worker fetch first, minimized window only when that fails the check. */
 async function gatherText(deps: FinisherDeps, url: string): Promise<string> {
 	let fetched = '';
@@ -153,7 +173,7 @@ async function gatherText(deps: FinisherDeps, url: string): Promise<string> {
 
 /** One finish run. Never throws; the outcome goes to state and the result. */
 export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): Promise<FinishResult> {
-	const result: FinishResult = { skipped: null, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, stopped: null };
+	const result: FinishResult = { skipped: null, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsStuck: 0, transcriptsBlocked: false, stopped: null };
 	const state = await loadFinishState(deps.store);
 	const hasToken = await deps.hasToken();
 	const hasAccess = deps.hasAccess ? await deps.hasAccess() : true;
@@ -185,12 +205,45 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 			else result.finished++;
 		};
 
+		// A video given up on stays waiting and must not hold a slot in front of newer ones.
+		const stuck = (i: WaitingItem) => i.code === 'needs_transcript' && (state.attempts[i.id] ?? 0) >= MAX_ITEM_ATTEMPTS;
+		result.transcriptsStuck = listed.items.filter(stuck).length;
+		const todo = listed.items.filter((i) => !stuck(i) && (i.code !== 'needs_transcript' || !!deps.readTranscript)).slice(0, limit);
+
 		let first = true;
-		for (const item of listed.items.slice(0, limit)) {
+		let transcriptsOff = false;
+		for (const item of todo) {
 			if (!first) await deps.sleep(jitter(deps, 2000, 4000));
 			first = false;
 			// Heartbeat: a long run keeps its lock fresh (stale after 15 min).
 			state.lastAttemptAt = deps.now();
+
+			// YouTube: the transcript is read in the browser; the page itself is never fetched.
+			if (item.code === 'needs_transcript') {
+				if (transcriptsOff) continue; // not this item's fault: no attempt counted
+				const videoId = youtubeVideoId(item.url);
+				let text: string | null = null;
+				if (videoId) {
+					try {
+						const t = await deps.readTranscript!(videoId);
+						text = t.text;
+						if (t.blocked) { transcriptsOff = true; result.transcriptsBlocked = true; }
+					} catch {
+						text = null;
+					}
+				}
+				if (!text) {
+					// A blocked answer says nothing about this video, so it costs no attempt.
+					if (!result.transcriptsBlocked) state.attempts[item.id] = (state.attempts[item.id] ?? 0) + 1;
+					if ((state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) result.transcriptsStuck++;
+					else result.retryLater++;
+					await saveFinishState(deps.store, state);
+					continue;
+				}
+				await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text)));
+				await saveFinishState(deps.store, state);
+				continue;
+			}
 
 			// A link we must not open is given up on without a fetch.
 			if (!isSafeFetchUrl(item.url) || (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) {

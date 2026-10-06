@@ -5,6 +5,7 @@ import { loadReadingSettings } from './storage-utils';
 import { createWaitingApi } from './waiting-api';
 import { isSafeFetchUrl } from './full-text-check';
 import { isOwnPageSender } from './sync-schedule';
+import { readYouTubeTranscript } from './youtube-transcript';
 import { ensureOffscreen, offscreenSupported, releaseOffscreen } from './offscreen-doc';
 import {
 	FINISH_ORIGINS, loadFinishState, runFinisher, saveFinishState, MAX_HTML_BYTES,
@@ -144,6 +145,8 @@ async function makeDeps(): Promise<FinisherDeps> {
 			try { return await browser.permissions.contains({ origins: FINISH_ORIGINS }); } catch { return false; }
 		},
 		fetchPage,
+		// READ-38: transcripts for waiting YouTube items, read in the worker with credentials omit.
+		readTranscript: (videoId) => readYouTubeTranscript(fetch, videoId),
 		extractHtml: (html, url) => askOffscreen({ action: 'extractHtml', html, url }),
 		openForExtraction,
 		sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -155,7 +158,7 @@ async function makeDeps(): Promise<FinisherDeps> {
 // triggers that arrive together both start (each reads it before either saves).
 let inFlight: ReturnType<typeof runFinisher> | null = null;
 export async function runFinish(trigger: FinishTrigger) {
-	if (inFlight) return { skipped: 'busy' as const, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, stopped: null };
+	if (inFlight) return { skipped: 'busy' as const, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsStuck: 0, transcriptsBlocked: false, stopped: null };
 	inFlight = (async () => {
 		try {
 			return await runFinisher(await makeDeps(), trigger);

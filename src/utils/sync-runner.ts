@@ -87,7 +87,7 @@ const isOn = async (service: SyncService) => (await loadState(store, service)).e
 const finishLine = (r: Awaited<ReturnType<typeof runFinish>>) =>
 	r.skipped
 		? `skipped (${r.skipped})`
-		: `${r.finished} finished, ${r.membersOnly} members only, ${r.unreadable} could not be opened${r.stopped ? `, stopped (${r.stopped})` : ''}`;
+		: `${r.finished} finished, ${r.membersOnly} members only, ${r.unreadable} could not be opened${r.transcriptsStuck ? `, ${r.transcriptsStuck} videos without a transcript left waiting` : ''}${r.transcriptsBlocked ? ', YouTube slowed transcripts down' : ''}${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 
 /**
  * The jobs in their fixed order (JOB_ORDER): Substack, Instagram, finish

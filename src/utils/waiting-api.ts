@@ -1,15 +1,20 @@
 // READ-181: the two LazyReader calls the finisher makes. Kept in one small
 // file so the shapes are easy to adjust (the server side is built in parallel).
-//   POST {base}/listWaiting  x-reader-token -> { items: [{ id, url, title, created_at }] }
+//   POST {base}/listWaiting  x-reader-token -> { items: [{ id, url, title, created_at, code }] }
+//        code is 'needs_text' (an article) or 'needs_transcript' (a YouTube video, READ-38);
+//        a server that predates it sends no code, read as 'needs_text'.
 //   POST {base}/provideText  x-reader-token, { item_id, text } | { item_id, outcome: 'unreadable' }
 //        -> { ok: true, outcome?: 'members_only' }
 // {base} comes from the capture URL setting: ".../api/capture" -> ".../api".
+
+export type WaitingCode = 'needs_text' | 'needs_transcript';
 
 export interface WaitingItem {
 	id: string;
 	url: string;
 	title: string;
 	created_at?: string;
+	code: WaitingCode;
 }
 
 export interface ListResult {
@@ -58,6 +63,7 @@ export function parseWaitingItems(json: any): WaitingItem[] {
 			url: it.url,
 			title: typeof it.title === 'string' ? it.title : '',
 			created_at: typeof it.created_at === 'string' ? it.created_at : undefined,
+			code: it.code === 'needs_transcript' ? 'needs_transcript' : 'needs_text',
 		});
 	}
 	return out;

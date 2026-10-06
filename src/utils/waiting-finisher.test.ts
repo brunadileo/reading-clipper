@@ -3,14 +3,16 @@ import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
 import { endpointUrl, parseWaitingItems } from './waiting-api';
 import type { WaitingApi, WaitingItem, ProvideResult } from './waiting-api';
 import {
-	AUTO_LIMIT, AUTO_MIN_GAP_MS, FINISH_KEY, NOW_LIMIT, emptyFinishState, pruneAttempts, runFinisher, shouldRun,
+	AUTO_LIMIT, AUTO_MIN_GAP_MS, FINISH_KEY, NOW_LIMIT, emptyFinishState, pruneAttempts, runFinisher, shouldRun, youtubeVideoId,
 	type FinisherDeps,
 } from './waiting-finisher';
 import { PREVIEW_NOTE } from './substack-sync';
 import { memoryStore } from './sync-test-helpers';
+import type { TranscriptRead } from './youtube-sync';
 
 const full = (n = 500) => 'word '.repeat(n).trim();
-const item = (i: number, url = `https://site${i}.example.com/a`): WaitingItem => ({ id: `i${i}`, url, title: `T${i}` });
+const item = (i: number, url = `https://site${i}.example.com/a`): WaitingItem => ({ id: `i${i}`, url, title: `T${i}`, code: 'needs_text' });
+const video = (i: number): WaitingItem => ({ id: `v${i}`, url: `https://www.youtube.com/watch?v=vid${String(i).padStart(8, '0')}`, title: '', code: 'needs_transcript' });
 
 function setup(opts: {
 	items?: WaitingItem[];
@@ -22,6 +24,8 @@ function setup(opts: {
 	list?: { ok: boolean; status?: number };
 	hasToken?: boolean;
 	noFallback?: boolean;
+	transcript?: (videoId: string) => TranscriptRead | Error;
+	noTranscriptReader?: boolean;
 }) {
 	const store = memoryStore(opts.state ? { [FINISH_KEY]: { ...emptyFinishState(), ...opts.state } } : {});
 	const fetched: string[] = [];
@@ -33,8 +37,15 @@ function setup(opts: {
 		provideText: async (id, text) => { provided.push({ id, text }); return opts.provide?.(id, text) ?? { ok: true, status: 200 }; },
 		markUnreadable: async (id) => { provided.push({ id, outcome: 'unreadable' }); return opts.provide?.(id) ?? { ok: true, status: 200 }; },
 	};
+	const transcriptCalls: string[] = [];
 	const deps: FinisherDeps = {
 		store, api,
+		readTranscript: opts.noTranscriptReader ? undefined : async (id) => {
+			transcriptCalls.push(id);
+			const r = opts.transcript ? opts.transcript(id) : { text: null, blocked: false };
+			if (r instanceof Error) throw r;
+			return r;
+		},
 		hasToken: async () => opts.hasToken ?? true,
 		fetchPage: async (url) => {
 			fetched.push(url);
@@ -48,7 +59,7 @@ function setup(opts: {
 		now: () => (t += 1000),
 		random: () => 0,
 	};
-	return { deps, store, fetched, opened, provided };
+	return { deps, store, fetched, opened, provided, transcriptCalls };
 }
 
 describe('waiting-api', () => {
@@ -308,5 +319,86 @@ describe('READ-48 all-sites grant', () => {
 		expect(finishNeedsAccess(s, false, false)).toBe(false);
 		expect(finishNeedsAccess({ ...s, enabled: false }, true, false)).toBe(false);
 		expect(describeFinishStatus(s, true, 0, false)).toBe('Off until you allow access to the sites you save from.');
+	});
+});
+
+describe('needs_transcript items (READ-38)', () => {
+	const words = 'word '.repeat(80).trim();
+
+	it('a needs_text and a needs_transcript item take their own paths', async () => {
+		const { deps, provided, fetched, transcriptCalls } = setup({
+			items: [item(1), video(2)],
+			pages: () => ({ status: 200, html: full() }),
+			transcript: () => ({ text: `## Transcript\n\n${words}`, blocked: false }),
+		});
+		const r = await runFinisher(deps, 'now');
+		expect(fetched).toEqual(['https://site1.example.com/a']); // the video page is never fetched
+		expect(transcriptCalls).toEqual(['vid00000002']);
+		expect(provided).toEqual([
+			{ id: 'i1', text: full() },
+			{ id: 'v2', text: `## Transcript\n\n${words}` },
+		]);
+		expect(r.finished).toBe(2);
+	});
+
+	it('a video with no transcript counts an attempt and stays waiting', async () => {
+		const { deps, provided, store } = setup({ items: [video(1)] });
+		const r = await runFinisher(deps, 'now');
+		expect(provided).toEqual([]);
+		expect(r.retryLater).toBe(1);
+		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 1 });
+	});
+
+	it('the 3rd failed attempt stops the retrying: no more reads, and never marked unreadable', async () => {
+		const { deps, provided, store, transcriptCalls } = setup({ items: [video(1)], state: { attempts: { v1: 2 } } });
+		const third = await runFinisher(deps, 'now');
+		expect(transcriptCalls).toHaveLength(1);
+		expect(third.transcriptsStuck).toBe(1);
+		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 3 });
+		const fourth = await runFinisher(deps, 'now');
+		expect(transcriptCalls).toHaveLength(1);
+		expect(fourth.transcriptsStuck).toBe(1);
+		expect(provided).toEqual([]); // the server only accepts unreadable for needs_text
+	});
+
+	it('a stuck video does not take a slot from the items behind it', async () => {
+		const items = [video(1), ...Array.from({ length: AUTO_LIMIT }, (_, i) => item(i + 10))];
+		const { deps, provided } = setup({ items, state: { attempts: { v1: 3 } }, pages: () => ({ status: 200, html: full() }) });
+		await runFinisher(deps, 'alarm');
+		expect(provided).toHaveLength(AUTO_LIMIT);
+	});
+
+	it('a blocked answer ends transcript reads for the run, costs no attempt, and articles still go', async () => {
+		const { deps, provided, store, transcriptCalls } = setup({
+			items: [video(1), video(2), item(3)],
+			transcript: () => ({ text: null, blocked: true }),
+			pages: () => ({ status: 200, html: full() }),
+		});
+		const r = await runFinisher(deps, 'now');
+		expect(transcriptCalls).toEqual(['vid00000001']);
+		expect(r.transcriptsBlocked).toBe(true);
+		expect(store.data[FINISH_KEY].attempts).toEqual({});
+		expect(provided).toEqual([{ id: 'i3', text: full() }]);
+	});
+
+	it('a throwing reader counts an attempt; an item with no reader is left alone', async () => {
+		const a = setup({ items: [video(1)], transcript: () => new Error('boom') });
+		await runFinisher(a.deps, 'now');
+		expect(a.store.data[FINISH_KEY].attempts).toEqual({ v1: 1 });
+		const b = setup({ items: [video(1)], noTranscriptReader: true });
+		const r = await runFinisher(b.deps, 'now');
+		expect(b.store.data[FINISH_KEY].attempts).toEqual({});
+		expect(r.retryLater).toBe(0);
+	});
+
+	it('a code-less item from an older server is an article', () => {
+		expect(parseWaitingItems({ items: [{ id: 'a', url: 'https://a.com' }, { id: 'b', url: 'https://www.youtube.com/watch?v=abcdefghijk', code: 'needs_transcript' }] }).map((i) => i.code)).toEqual(['needs_text', 'needs_transcript']);
+	});
+
+	it('reads the video id only from a youtube.com watch link', () => {
+		expect(youtubeVideoId('https://www.youtube.com/watch?v=abcdefghijk')).toBe('abcdefghijk');
+		expect(youtubeVideoId('https://evil.example/watch?v=abcdefghijk')).toBeNull();
+		expect(youtubeVideoId('https://www.youtube.com/watch')).toBeNull();
+		expect(youtubeVideoId('nope')).toBeNull();
 	});
 });
