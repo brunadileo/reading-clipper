@@ -1,4 +1,4 @@
-select {
+select:not(.lr-select) {
 	-webkit-appearance: none;
 	appearance: none;
 	height: var(--input-height);

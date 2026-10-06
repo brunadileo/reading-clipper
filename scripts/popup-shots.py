@@ -54,6 +54,7 @@ STUB = r"""
         if (msg.message && msg.message.action === 'getReaderModeState') return { isActive: false };
         return { success: true };
       case 'sendToReading':
+        window.__sent = msg.body;
         if (cfg.capture === 'hang') return new Promise(() => {});
         if (cfg.capture === 'ok') return { ok: true, status: 200, data: { readUrl: 'https://lazyreader.app/read/1' } };
         if (cfg.capture === '401') return { ok: false, status: 401, error: 'not-connected' };
@@ -155,7 +156,7 @@ def run(args):
         for scheme in schemes:
             for name, (page_file, frag, token, tab_url, capture, width) in states().items():
                 if wanted and name not in wanted: continue
-                ctx = browser.new_context(viewport={"width": width, "height": 800 if width == 360 else 900}, color_scheme=scheme, device_scale_factor=2)
+                ctx = browser.new_context(viewport={"width": width, "height": 520 if width == 360 else 900}, color_scheme=scheme, device_scale_factor=2)
                 cfg = {"local": {"readingToken": "a" * 48} if token else {}, "tabUrl": tab_url, "title": FIXTURE_TITLE, "text": FIXTURE_TEXT, "version": version, "capture": capture}
                 ctx.add_init_script(STUB.replace("%CFG%", json.dumps(cfg)))
                 page = ctx.new_page()
@@ -165,6 +166,8 @@ def run(args):
                 page.goto(f"{base}/{page_file}{frag}")
                 page.wait_for_timeout(1200)
                 if capture:
+                    if name == "popup-saved" and page.query_selector('[data-value="read-later"]'):
+                        page.click('[data-value="read-later"]')  # proves the tab writes #vault-select
                     page.click("#clip-btn")
                     page.wait_for_timeout(1000)
                 if page_file == "settings.html" and name == "settings-about":
@@ -180,6 +183,8 @@ def run(args):
                     line += f"  scrollW={o['scrollW']}/{o['clientW']}"
                     if o['bad']: line += f"  OVERFLOW={o['bad']}"
                     if c and c[0]['ratio'] < 4.5: problems += 1
+                sent = page.evaluate("window.__sent") if capture else None
+                if sent: line += f"  sent: lane={sent.get('lane')} title={sent.get('title')!r} text_len={len(sent.get('text') or '')}"
                 if errors: line += f"  CONSOLE-ERRORS={errors[:3]}"
                 print(line)
                 ctx.close()

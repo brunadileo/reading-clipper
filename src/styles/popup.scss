@@ -1,9 +1,9 @@
 :root {
-	--popup-width: 350px;
+	--popup-width: 360px;
 	--popup-width-expanded: 500px;
-	--popup-height: 540px;
+	--popup-height: 420px;
 	--popup-max-height: 540px;
-	--chromium-popup-height: 540px;
+	--chromium-popup-height: 420px;
 }
 
 .is-safari,
@@ -112,7 +112,7 @@
 		}
 
 		a.btn,
-		button {
+		button:not([class*='lr-']) {
 			width: auto;
 			padding: 0.25rem 1rem;
 		}

@@ -6,9 +6,10 @@
 	--safe-area-inset-left: env(safe-area-inset-left);
 	--safe-area-inset-right: env(safe-area-inset-right);
 
-	--accent-h: 258;
-	--accent-s: 88%;
-	--accent-l: 66%;
+	// READ-236: navy-700 of the Lazy Reader tokens (was Obsidian purple); _lazy-map.scss takes over the dark values.
+	--accent-h: 217;
+	--accent-s: 44%;
+	--accent-l: 29%;
 
 	--background-primary: var(--color-base-00);
 	--background-primary-alt: var(--color-base-10);

@@ -1,4 +1,5 @@
-button,
+// READ-236: buttons that carry an lr- class come from the shared design copy.
+button:not([class*='lr-']),
 .btn {
 	cursor: pointer;
 	display: inline-flex;

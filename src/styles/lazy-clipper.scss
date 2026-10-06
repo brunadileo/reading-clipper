@@ -1,0 +1,226 @@
+// READ-236: the popup on the Lazy Reader look. Everything here sits on top of
+// the generated _lazy-ui.scss classes (.lr-popup-head, .lr-page-card, .lr-tabs,
+// .lr-btn, .lr-connect ...) and only adds what the clipper needs that the
+// design copy does not have. Gaps to hand to READ-237 are listed in the plan's run log.
+// Scoped to #popup-container so the side panel (old markup) is untouched.
+
+#popup-container {
+	background-color: hsl(var(--background));
+	color: hsl(var(--foreground));
+	font-family: var(--font-body);
+	font-size: var(--text-base);
+	line-height: var(--text-base-lh);
+
+	[hidden] {
+		display: none !important;
+	}
+
+	// Header: on the page colour, tile with icon A, name, settings.
+	.lr-popup-head {
+		gap: 10px;
+		padding: 12px 12px 12px 16px;
+		background-color: hsl(var(--card));
+		.lr-tile {
+			overflow: hidden;
+			img {
+				display: block;
+				width: 100%;
+				height: 100%;
+			}
+		}
+		.lr-iconbtn svg {
+			width: 18px;
+			height: 18px;
+		}
+	}
+
+	// Page card: white on the pale page, with the same inset look as the design copy's well.
+	.lr-page-card {
+		background-color: hsl(var(--card));
+		box-shadow: 0 0 0 1px hsl(var(--border)), var(--shadow-1);
+		align-items: start;
+		.lr-tile#page-tile {
+			width: 36px;
+			height: 36px;
+			border-radius: 9px;
+			overflow: hidden;
+			font-size: var(--text-md);
+			font-weight: 700;
+			color: hsl(var(--foreground));
+			img {
+				width: 20px;
+				height: 20px;
+				object-fit: contain;
+			}
+		}
+		.page-card-text {
+			display: grid;
+			gap: 2px;
+			min-width: 0;
+		}
+		#page-site {
+			display: block;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	// The title is the editable field: reads as text, shows a ring on focus.
+	.lr-page-card #note-name-field {
+		display: block;
+		margin: 0 -4px;
+		padding: 0 4px;
+		width: calc(100% + 8px);
+		border: 0;
+		border-radius: var(--radius-xs);
+		background: transparent;
+		box-shadow: none;
+		color: hsl(var(--foreground));
+		font-family: var(--font-body);
+		font-size: var(--text-md);
+		line-height: var(--text-md-lh);
+		font-weight: 600;
+		resize: none;
+		overflow: hidden;
+		// Grows with the text (adjustNoteNameHeight sets min-height inline, so it is reset here).
+		field-sizing: content;
+		min-height: 0 !important;
+		height: auto;
+		max-height: calc(var(--text-md-lh) * 2);
+		&:hover {
+			background-color: hsl(var(--accent-soft));
+		}
+		&:focus,
+		&:focus-visible {
+			outline: none;
+			background-color: hsl(var(--well));
+			box-shadow: 0 0 0 3px hsl(var(--primary) / 0.22);
+			max-height: calc(var(--text-md-lh) * 3);
+			overflow-y: auto;
+		}
+	}
+
+	// Lane tabs.
+	.lr-tabs {
+		.lr-tab {
+			min-width: 0;
+			padding: 0 6px;
+			white-space: nowrap;
+			width: auto;
+		}
+	}
+
+	// Save.
+	#clip-btn {
+		width: 100%;
+	}
+
+	// Foot: connection state and the link out.
+	.lr-popup-foot {
+		background-color: hsl(var(--card));
+		.foot-state {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+		}
+		a {
+			font-weight: 600;
+			color: hsl(var(--primary));
+			text-decoration: none;
+			border-radius: var(--radius-xs);
+			&:hover {
+				text-decoration: underline;
+			}
+			&:focus-visible {
+				outline: none;
+				box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 4px hsl(var(--ring));
+			}
+		}
+	}
+
+	// Status cards: saving, saved, failed, not connected. One card, one button.
+	.reading-status {
+		display: flex;
+		align-items: flex-start;
+		justify-content: stretch;
+		height: auto;
+		padding: 16px;
+		text-align: left;
+		.lr-status-card {
+			width: 100%;
+			gap: 16px;
+			padding: 16px;
+		}
+		.lr-connect-top {
+			gap: 12px;
+		}
+		.lr-status-message {
+			margin: 0;
+			flex: 1;
+			min-width: 0;
+			font-size: var(--text-md);
+			line-height: var(--text-md-lh);
+			font-weight: 600;
+			color: hsl(var(--foreground));
+			overflow-wrap: anywhere;
+		}
+		.st-tile,
+		.st-spinner,
+		.st-dot {
+			display: none;
+		}
+		.st-tile {
+			overflow: hidden;
+			img {
+				display: block;
+				width: 100%;
+				height: 100%;
+			}
+		}
+		.st-spinner {
+			width: 20px;
+			height: 20px;
+			color: hsl(var(--primary));
+		}
+		.st-dot {
+			width: 10px;
+			height: 10px;
+		}
+		&[data-state='saving'] .st-spinner,
+		&[data-state='saved'] .st-dot,
+		&[data-state='failed'] .st-dot,
+		&[data-state='signin'] .st-tile {
+			display: inline-block;
+		}
+		&[data-state='signin'] .st-tile {
+			display: grid;
+			width: 40px;
+			height: 40px;
+		}
+		&[data-state='saved'] .st-dot {
+			background-color: hsl(var(--ok));
+		}
+		&[data-state='failed'] .st-dot {
+			background-color: hsl(var(--destructive));
+		}
+		a.lr-btn,
+		button.lr-btn {
+			width: 100%;
+		}
+	}
+
+	// Restricted pages (chrome://) and start-up errors: same card, quiet text.
+	.error-message {
+		margin: 16px;
+		padding: 16px;
+		height: auto;
+		text-align: left;
+		justify-content: flex-start;
+		font-size: var(--text-sm);
+		line-height: var(--text-sm-lh);
+		font-weight: 500;
+		color: hsl(var(--foreground));
+		box-shadow: 0 0 0 1px hsl(var(--border)), var(--shadow-1);
+	}
+}

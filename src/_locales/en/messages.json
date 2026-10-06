@@ -1139,5 +1139,23 @@
 	},
 	"version": {
 		"message": "Version"
+	},
+	"laneTabsLabel": {
+		"message": "Save as"
+	},
+	"pageTitleLabel": {
+		"message": "Page title"
+	},
+	"openInLazyReader": {
+		"message": "Open in Lazy Reader"
+	},
+	"openLazyReader": {
+		"message": "Open Lazy Reader"
+	},
+	"popupConnected": {
+		"message": "Connected"
+	},
+	"popupNotConnected": {
+		"message": "Not connected"
 	}
 }

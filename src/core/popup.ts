@@ -25,6 +25,7 @@ import { sanitizeFileName } from '../utils/string-utils';
 import { saveFile } from '../utils/file-utils';
 import { translatePage, getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { formatPropertyValue } from '../utils/shared';
+import { renderLaneTabs, syncLaneTabs } from '../utils/lane-tabs';
 
 interface ReaderModeResponse {
 	success: boolean;
@@ -367,8 +368,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 					console.error('Error opening options page:', error);
 				}
 			});
+			settingsButton.setAttribute('aria-label', getMessage('settings'));
 			initializeIcons(settingsButton);
 		}
+		document.getElementById('note-name-field')?.setAttribute('aria-label', getMessage('pageTitleLabel'));
+		document.getElementById('lane-tabs')?.setAttribute('aria-label', getMessage('laneTabsLabel'));
+		void updateConnectionFoot();
 
 		// Initialize the rest of the popup
 		if (currentTabId) {
@@ -737,6 +742,8 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 					extractedData.schemaOrgData
 				);
 
+				updatePageCard(currentVariables, currentUrl);
+
 				// Update variables panel if it's open
 				updateVariablesPanel(currentTemplate, currentVariables);
 			} else {
@@ -782,6 +789,7 @@ function buildTemplateFieldsSkeleton(template: Template | null) {
 	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement;
 	if (vaultDropdown && lastSelectedVault && READING_LANES.some(lane => lane.value === lastSelectedVault)) {
 		vaultDropdown.value = lastSelectedVault;
+		syncLaneTabsToSelect();
 	}
 
 	const existingTemplateProperties = document.querySelector('.metadata-properties') as HTMLElement;
@@ -1088,6 +1096,56 @@ function updateVaultDropdown() {
 		lastSelectedVault = vaultDropdown.value;
 		setLocalStorage('lastSelectedVault', lastSelectedVault);
 	});
+
+	// READ-236: the visible picker is the lane tabs; the select stays the source of truth.
+	laneTabsEl = document.getElementById('lane-tabs');
+	if (laneTabsEl) {
+		renderLaneTabs(laneTabsEl, vaultDropdown, READING_LANES.map(lane => ({ value: lane.value, label: getMessage(lane.labelKey) })));
+	}
+}
+
+let laneTabsEl: HTMLElement | null = null;
+
+// A programmatic `value =` fires no event, so the tabs are told to follow.
+function syncLaneTabsToSelect(): void {
+	const select = document.getElementById('vault-select') as HTMLSelectElement | null;
+	if (laneTabsEl && select) syncLaneTabs(laneTabsEl, select);
+}
+
+// READ-236: foot line from the stored token only, no network call.
+async function updateConnectionFoot(): Promise<void> {
+	const dot = document.getElementById('foot-dot');
+	const label = document.getElementById('foot-state');
+	if (!dot || !label) return;
+	try {
+		const { token } = await loadReadingSettings();
+		const connected = token.trim().length > 0;
+		label.textContent = getMessage(connected ? 'popupConnected' : 'popupNotConnected');
+		dot.classList.toggle('lr-dot-ok', connected);
+		dot.classList.toggle('lr-dot-amber', !connected);
+	} catch {
+		// Storage unreadable: leave the foot empty rather than guess.
+	}
+}
+
+// READ-236: the page card's tile (favicon, else the site's first letter) and site name.
+function updatePageCard(variables: { [key: string]: string }, url: string): void {
+	const tile = document.getElementById('page-tile');
+	const siteEl = document.getElementById('page-site');
+	let host = '';
+	try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep empty */ }
+	const site = (variables['{{site}}'] || '').trim() || host;
+	if (siteEl) siteEl.textContent = host && site.toLowerCase() !== host.toLowerCase() ? `${site} \u00b7 ${host}` : site;
+	if (!tile) return;
+	const letter = (site || host || '?').charAt(0).toUpperCase();
+	tile.textContent = letter;
+	const favicon = variables['{{favicon}}'];
+	if (favicon && /^https?:/i.test(favicon)) {
+		const img = document.createElement('img');
+		img.alt = '';
+		img.addEventListener('load', () => tile.replaceChildren(img), { once: true });
+		img.src = favicon;
+	}
 }
 
 function refreshPopup() {
@@ -1423,18 +1481,23 @@ async function handleClipObsidian(): Promise<void> {
 	}
 }
 
-function showReadingStatusMessage(message: string): void {
+type ReadingStatusState = 'saving' | 'saved' | 'failed' | 'signin';
+
+function showReadingStatusMessage(message: string, state: ReadingStatusState = 'saving'): void {
 	const statusEl = document.getElementById('reading-status') as HTMLElement | null;
 	const statusMessage = document.getElementById('reading-status-message') as HTMLElement | null;
 	const clipper = document.querySelector('.clipper') as HTMLElement | null;
 	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
 	const tryAgainBtn = document.getElementById('reading-try-again') as HTMLButtonElement | null;
+	const doneBtn = document.getElementById('reading-done') as HTMLButtonElement | null;
 
 	if (!statusEl || !statusMessage || !clipper) return;
 
 	statusMessage.textContent = message;
+	statusEl.dataset.state = state;
 	if (openLink) openLink.style.display = 'none';
 	if (tryAgainBtn) tryAgainBtn.style.display = 'none';
+	if (doneBtn) doneBtn.style.display = 'none';
 	// A 401 screen's Sign in button must not outlive a later success.
 	const signInBtn = document.getElementById('reading-sign-in') as HTMLButtonElement | null;
 	if (signInBtn) signInBtn.style.display = 'none';
@@ -1444,19 +1507,24 @@ function showReadingStatusMessage(message: string): void {
 }
 
 export function showReadingSuccess(readUrl: string | undefined, message: string): void {
-	showReadingStatusMessage(message);
+	showReadingStatusMessage(message, 'saved');
 	const openLink = document.getElementById('reading-open-link') as HTMLAnchorElement | null;
 	if (openLink && readUrl) {
 		openLink.href = readUrl;
-		openLink.style.display = 'inline-block';
+		openLink.style.display = 'inline-flex';
+	}
+	const doneBtn = document.getElementById('reading-done') as HTMLButtonElement | null;
+	if (doneBtn) {
+		doneBtn.style.display = 'inline-flex';
+		doneBtn.onclick = () => window.close();
 	}
 }
 
 export function showReadingRetry(message: string, offerSignIn = false): void {
-	showReadingStatusMessage(message);
+	showReadingStatusMessage(message, offerSignIn ? 'signin' : 'failed');
 	const signInBtn = document.getElementById('reading-sign-in') as HTMLButtonElement | null;
 	if (signInBtn) {
-		signInBtn.style.display = offerSignIn ? 'inline-block' : 'none';
+		signInBtn.style.display = offerSignIn ? 'inline-flex' : 'none';
 		signInBtn.onclick = () => {
 			void browser.tabs.create({ url: CONNECT_URL });
 			window.close();
@@ -1464,7 +1532,8 @@ export function showReadingRetry(message: string, offerSignIn = false): void {
 	}
 	const tryAgainBtn = document.getElementById('reading-try-again') as HTMLButtonElement | null;
 	if (tryAgainBtn) {
-		tryAgainBtn.style.display = 'inline-block';
+		// The sign-in screen has one button; a retry would fail the same way.
+		tryAgainBtn.style.display = offerSignIn ? 'none' : 'inline-flex';
 		tryAgainBtn.onclick = () => {
 			hideReadingStatus();
 			handleClipObsidian();

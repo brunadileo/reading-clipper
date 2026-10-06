@@ -1,0 +1,39 @@
+// READ-236: maps the Obsidian-era variables that visible pieces still read
+// (menus, the error line, focus rings, scrollbars) onto the Lazy Reader tokens
+// in _lazy-tokens.scss. Imported after _lazy-ui. The tokens hold bare HSL
+// triples, so every value is wrapped in hsl(). Dark follows the tokens' own
+// prefers-color-scheme block, because these are var() references.
+
+:root {
+	--background-primary: hsl(var(--background));
+	--background-primary-alt: hsl(var(--card));
+	--background-secondary: hsl(var(--secondary));
+	--background-modifier-form-field: hsl(var(--well));
+	--background-modifier-border: hsl(var(--border));
+	--background-modifier-border-hover: hsl(var(--input));
+	--background-modifier-border-focus: hsl(var(--ring));
+	--background-modifier-hover: hsl(var(--accent) / 0.6);
+	--divider-color: hsl(var(--border));
+
+	--text-normal: hsl(var(--foreground));
+	--text-muted: hsl(var(--muted-foreground));
+	--text-faint: hsl(var(--placeholder));
+	--text-accent: hsl(var(--primary));
+	--text-accent-hover: hsl(var(--primary-hover));
+	--text-on-accent: hsl(var(--primary-foreground));
+	--text-error: hsl(var(--destructive));
+	--text-success: hsl(var(--ok));
+	--text-selection: hsl(var(--primary) / 0.22);
+
+	--interactive-accent: hsl(var(--primary));
+	--interactive-accent-hover: hsl(var(--primary-hover));
+	--interactive-normal: hsl(var(--card));
+	--interactive-hover: hsl(var(--accent-soft));
+
+	--font-default: var(--font-body);
+	--font-ui-smallest: var(--text-2xs);
+	--font-ui-smaller: var(--text-xs);
+	--font-ui-small: var(--text-sm);
+	--font-ui-medium: var(--text-base);
+	--font-ui-large: var(--text-md);
+}
