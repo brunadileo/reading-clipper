@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { memoryStore } from './sync-test-helpers';
 import {
 	intervalMinutes, isDue, isOwnPageSender, isRunning, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
-	JOB_PAUSE_MS, SCHEDULE_KEY, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
+	JOB_ORDER, JOB_PAUSE_MS, SCHEDULE_KEY, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
 } from './sync-schedule';
 
 const HOUR = 3_600_000;
@@ -136,6 +136,55 @@ describe('sequence', () => {
 		const h = harness();
 		await runSequence([job('a', [])], h.deps, 'finish-now', { recordRun: false });
 		expect((await loadSchedule(h.store)).lastRunAt).toBeNull();
+	});
+});
+
+describe('four jobs with YouTube (READ-38)', () => {
+	const names: Record<string, string> = { substack: 'Substack', instagram: 'Instagram', finish: 'Finish waiting articles', youtube: 'YouTube' };
+	const four = (h: ReturnType<typeof harness>, log: string[], steps: string[], over: Record<string, Partial<SyncJob> & { fail?: boolean }> = {}): SyncJob[] =>
+		JOB_ORDER.map((id) => ({
+			...job(id, log, over[id] ?? {}),
+			name: names[id],
+			run: over[id]?.fail
+				? async () => { log.push(`fail:${id}`); throw new Error('refused'); }
+				: async () => { steps.push(describeScheduleStatus(await loadSchedule(h.store), h.now())); log.push(id); return 'ok'; },
+		}));
+
+	it('runs YouTube fourth, after Substack, Instagram and finish', () => {
+		expect(JOB_ORDER).toEqual(['substack', 'instagram', 'finish', 'youtube']);
+	});
+	it('shows "4 of 4: YouTube" and never overlaps the others', async () => {
+		const h = harness();
+		const log: string[] = [];
+		const steps: string[] = [];
+		await runSequence(four(h, log, steps), h.deps, 'now');
+		expect(log).toEqual(['substack', 'instagram', 'finish', 'youtube']);
+		expect(steps).toEqual(['1 of 4: Substack', '2 of 4: Instagram', '3 of 4: Finish waiting articles', '4 of 4: YouTube']);
+		expect(h.sleeps).toEqual([JOB_PAUSE_MS, JOB_PAUSE_MS, JOB_PAUSE_MS]);
+	});
+	it('a failing YouTube job is recorded and does not stop a job that comes after it', async () => {
+		const h = harness();
+		const log: string[] = [];
+		const later = job('medium', log);
+		const jobs = [...four(h, log, [], { youtube: { fail: true } }), later];
+		const res = await runSequence(jobs, h.deps, 'now');
+		expect(log).toEqual(['substack', 'instagram', 'finish', 'fail:youtube', 'start:medium', 'end:medium']);
+		expect(res.ran.map((r) => r.ok)).toEqual([true, true, true, false, true]);
+		expect((await loadSchedule(h.store)).lastSummary).toContain('YouTube: failed, refused');
+	});
+	it('a failing job before YouTube does not skip it', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence(four(h, log, [], { finish: { fail: true } }), h.deps, 'now');
+		expect(log[log.length - 1]).toBe('youtube');
+	});
+	it('YouTube alone: step 1 of 1, and it follows the shared floor like the others', async () => {
+		const h = harness();
+		const log: string[] = [];
+		const only = four(h, log, []).map((j) => ({ ...j, enabled: async () => j.id === 'youtube' }));
+		expect((await runSequence(only, h.deps, 'alarm')).ran.map((r) => r.id)).toEqual(['youtube']);
+		// Inside the interval a scheduled trigger does nothing.
+		expect((await runSequence(only, h.deps, 'idle')).skipped).toBe('not-due');
 	});
 });
 

@@ -6,6 +6,7 @@ import browser from '../utils/browser-polyfill';
 import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
+import { costWarning, FIRST_RUN_VIDEOS, hasSource } from '../utils/youtube-sync';
 import { IS_STORE_BUILD } from '../utils/store-build';
 import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
 
@@ -14,6 +15,9 @@ const ORIGINS: Record<SyncService, string[]> = {
 	instagram: ['https://www.instagram.com/*', 'https://i.instagram.com/*'],
 	youtube: ['https://www.youtube.com/*'],
 };
+// YouTube also needs the optional `cookies` permission (for the SAPISIDHASH header
+// of the paging call). It is asked in the same prompt as the site access.
+const PERMISSIONS: Partial<Record<SyncService, string[]>> = { youtube: ['cookies'] };
 const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram', youtube: 'YouTube' };
 
 const store = {
@@ -30,6 +34,7 @@ const store = {
 export function describeSyncStatus(service: SyncService, s: SyncState, now: number): string {
 	const name = NAMES[service];
 	if (!s.enabled) return 'Off';
+	if (service === 'youtube' && !hasSource(s)) return 'Turned on. Choose Watch later or a playlist below.';
 	if (s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < 15 * 60 * 1000) return 'Syncing...';
 	if (s.signedOut) return `Sign in to ${name} in this browser, then press Sync now.`;
 	if (s.lastError) return `Last sync failed: ${s.lastError}`;
@@ -39,8 +44,32 @@ export function describeSyncStatus(service: SyncService, s: SyncState, now: numb
 	return `Last synced ${ago}${s.lastResult ? ` (${s.lastResult})` : ''}`;
 }
 
+// Read inside the click that turns YouTube on, where nothing can be awaited first.
+let youtubeNeverRan = true;
+
+const YT_PLAYLIST_LINK = 'https://www.youtube.com/playlist?list=';
+
+function refreshYoutubeExtras(state: SyncState): void {
+	youtubeNeverRan = state.lastSuccess === null;
+	const extras = document.getElementById('sync-youtube-extras');
+	if (extras) extras.hidden = !state.enabled;
+	const cfg = state.youtube;
+	const wl = document.getElementById('sync-youtube-wl') as HTMLInputElement | null;
+	const shorts = document.getElementById('sync-youtube-shorts') as HTMLInputElement | null;
+	const input = document.getElementById('sync-youtube-playlist') as HTMLInputElement | null;
+	const note = document.getElementById('sync-youtube-playlist-note');
+	for (const [box, on] of [[wl, !!cfg?.watchLater], [shorts, !!cfg?.includeShorts]] as const) {
+		if (!box) continue;
+		box.checked = on;
+		box.closest('.checkbox-container')?.classList.toggle('is-enabled', on);
+	}
+	if (input && document.activeElement !== input) input.value = cfg?.playlistId ? `${YT_PLAYLIST_LINK}${cfg.playlistId}` : '';
+	if (note && cfg?.playlistId && cfg.playlistTitle) note.textContent = `Reading the playlist "${cfg.playlistTitle}".`;
+}
+
 async function refresh(service: SyncService): Promise<void> {
 	const state = await loadState(store, service);
+	if (service === 'youtube') refreshYoutubeExtras(state);
 	const toggle = document.getElementById(`sync-${service}-toggle`) as HTMLInputElement | null;
 	const status = document.getElementById(`sync-${service}-status`);
 	const older = document.getElementById(`sync-${service}-older`) as HTMLButtonElement | null;
@@ -50,7 +79,14 @@ async function refresh(service: SyncService): Promise<void> {
 	}
 	setText(status, describeSyncStatus(service, state, Date.now()));
 	if (older) {
-		older.disabled = !state.enabled || state.running || state.olderExhausted;
+		if (service === 'youtube') {
+			// Exhausted only when every chosen list has been read to its end.
+			const c = state.youtube?.cursors;
+			const lists = [state.youtube?.watchLater ? c?.wl : null, state.youtube?.playlistId ? c?.pl : null].filter(Boolean) as Array<{ exhausted: boolean; started: boolean }>;
+			older.disabled = !state.enabled || state.running || lists.length === 0 || lists.every((l) => l.exhausted || !l.started);
+		} else {
+			older.disabled = !state.enabled || state.running || state.olderExhausted;
+		}
 		older.hidden = !state.enabled;
 	}
 }
@@ -72,13 +108,22 @@ function setupService(service: SyncService): void {
 			}
 		}
 		// permissions.request has to run inside the click, before any await.
+		if (wantOn && service === 'youtube' && youtubeNeverRan && !window.confirm(`${costWarning(FIRST_RUN_VIDEOS)}\n\nTurn YouTube on?`)) {
+			toggle.checked = false;
+			return;
+		}
+		const permissions = PERMISSIONS[service];
 		const granted: Promise<boolean> = wantOn
-			? browser.permissions.request({ origins: ORIGINS[service] }).catch(() => false)
+			? browser.permissions.request({ origins: ORIGINS[service], ...(permissions ? { permissions } : {}) } as any).catch(() => false)
 			: Promise.resolve(true);
 		void granted.then(async (ok) => {
 			if (!ok) {
 				toggle.checked = false;
-				if (status) status.textContent = `${NAMES[service]} sync needs access to ${NAMES[service]}'s site. It stays off.`;
+				if (status) {
+					status.textContent = service === 'youtube'
+						? "YouTube sync needs access to YouTube's site and to your YouTube sign-in cookie in this browser. It stays off."
+						: `${NAMES[service]} sync needs access to ${NAMES[service]}'s site. It stays off.`;
+				}
 				return;
 			}
 			await browser.runtime.sendMessage({ action: 'syncSetEnabled', service, enabled: wantOn });
@@ -108,7 +153,58 @@ function setupService(service: SyncService): void {
 		}
 	});
 
+	if (service === 'youtube') setupYoutubeExtras(status);
 	void refresh(service);
+}
+
+function setupYoutubeExtras(status: HTMLElement | null): void {
+	const wl = document.getElementById('sync-youtube-wl') as HTMLInputElement | null;
+	const shorts = document.getElementById('sync-youtube-shorts') as HTMLInputElement | null;
+	const input = document.getElementById('sync-youtube-playlist') as HTMLInputElement | null;
+	const check = document.getElementById('sync-youtube-check') as HTMLButtonElement | null;
+	const note = document.getElementById('sync-youtube-playlist-note');
+	const say = (msg: string) => { if (status) status.textContent = msg; };
+	const send = async (change: Record<string, unknown>) => {
+		const res: any = await browser.runtime.sendMessage({ action: 'youtubeSetConfig', change });
+		if (!res?.ok) throw new Error(String(res?.error ?? 'Could not save').replace(/^Error:\s*/, ''));
+	};
+	for (const [box, key] of [[wl, 'watchLater'], [shorts, 'includeShorts']] as const) {
+		box?.addEventListener('change', async () => {
+			try {
+				await send({ [key]: box.checked });
+			} catch (e) {
+				box.checked = !box.checked;
+				say(e instanceof Error ? e.message : String(e));
+			}
+			await refresh('youtube');
+		});
+	}
+	check?.addEventListener('click', async () => {
+		if (!input) return;
+		check.disabled = true;
+		try {
+			// An empty field clears the playlist.
+			if (!input.value.trim()) {
+				await send({ playlist: null });
+				if (note) note.textContent = 'No playlist chosen.';
+			} else {
+				if (note) note.textContent = 'Checking...';
+				const res: any = await browser.runtime.sendMessage({ action: 'youtubeCheckPlaylist', input: input.value });
+				const r = res?.result;
+				if (!res?.ok || !r?.ok) {
+					if (note) note.textContent = r?.message ?? 'Could not check the playlist.';
+				} else {
+					await send({ playlist: { id: r.id, title: r.title } });
+					if (note) note.textContent = `Reading the playlist "${r.title}".`;
+				}
+			}
+		} catch (e) {
+			if (note) note.textContent = e instanceof Error ? e.message : String(e);
+		} finally {
+			check.disabled = false;
+			await refresh('youtube');
+		}
+	});
 }
 
 async function refreshSchedule(): Promise<void> {
@@ -167,12 +263,14 @@ function setupSchedule(): void {
 
 // Instagram sync is not in the first store listing (READ-48 choice 5): its row
 // is hidden and the finisher row takes the second number.
-const SERVICES: SyncService[] = IS_STORE_BUILD ? ['substack'] : ['substack', 'instagram'];
+const SERVICES: SyncService[] = IS_STORE_BUILD ? ['substack'] : ['substack', 'instagram', 'youtube'];
 
 export function initializeSyncSettings(): void {
 	setupSchedule();
 	if (IS_STORE_BUILD) {
-		(document.querySelector('.sync-service[data-service="instagram"]') as HTMLElement | null)?.style.setProperty('display', 'none');
+		for (const hidden of ['instagram', 'youtube']) {
+			(document.querySelector(`.sync-service[data-service="${hidden}"]`) as HTMLElement | null)?.style.setProperty('display', 'none');
+		}
 		const num = document.getElementById('finish-num');
 		if (num) num.textContent = '2';
 	}

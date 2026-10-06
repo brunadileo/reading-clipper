@@ -9,10 +9,13 @@ import { DEFAULT_READING_LANE, loadReadingSettings } from './storage-utils';
 import { loadState, saveState, type SyncDeps, type SyncService } from './sync-core';
 import { runSubstackSync } from './substack-sync';
 import { runInstagramSync } from './instagram-sync';
+import { applyYoutubeConfig, checkPlaylist, extractPlaylistId, hasSource, runYoutubeSync, type YoutubeConfigChange, type YoutubeDeps } from './youtube-sync';
+import { readYouTubeTranscript } from './youtube-transcript';
+import { buildAuthorization } from './sapisid-hash';
 import { finishSupported, ownPageSender, runFinish, trustedSender } from './waiting-runner';
 import { isEnabled, loadFinishState } from './waiting-finisher';
 import {
-	intervalMinutes, isFrequency, loadSchedule, nextDueAt, runSequence, saveSchedule,
+	JOB_ORDER, intervalMinutes, isFrequency, loadSchedule, nextDueAt, runSequence, saveSchedule,
 	type SequenceTrigger, type SyncJob,
 } from './sync-schedule';
 
@@ -55,6 +58,22 @@ function makeDeps(service: SyncService): SyncDeps {
 	};
 }
 
+/**
+ * YouTube also reads transcripts in the browser (credentials omit) and, for the
+ * paging call only, builds the SAPISIDHASH header from the SAPISID cookie. The
+ * cookie is read here, in the worker, and only the header leaves it, only to
+ * youtube.com. Without the optional `cookies` permission chrome.cookies is
+ * absent and the paging call goes without the header.
+ */
+function makeYoutubeDeps(): YoutubeDeps {
+	const base = makeDeps('youtube');
+	return {
+		...base,
+		readTranscript: (videoId) => readYouTubeTranscript(base.fetchFn, videoId),
+		authHeader: () => buildAuthorization(typeof chrome !== 'undefined' ? (chrome as any).cookies : undefined, Date.now()),
+	};
+}
+
 const alarms = () => (typeof chrome !== 'undefined' ? (chrome as any).alarms : undefined);
 
 const sequenceDeps = {
@@ -71,12 +90,13 @@ const finishLine = (r: Awaited<ReturnType<typeof runFinish>>) =>
 		: `${r.finished} finished, ${r.membersOnly} members only, ${r.unreadable} could not be opened${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 
 /**
- * The jobs in their fixed order. Finish runs last so the paid previews the
- * services just parked as "Waiting for full text" are picked up in the same
- * run (JOB_PAUSE_MS covers the server parking them). Medium goes before it later.
+ * The jobs in their fixed order (JOB_ORDER): Substack, Instagram, finish
+ * waiting, then YouTube (step 4, READ-38 choice 4). New jobs go after the
+ * existing ones. Finish stays ahead of YouTube, so a video the server parked as
+ * "Waiting for transcript" is filled on the next run.
  */
 function buildJobs(manual: boolean): SyncJob[] {
-	return [
+	const jobs: SyncJob[] = [
 		{
 			id: 'substack',
 			name: 'Substack',
@@ -107,7 +127,21 @@ function buildJobs(manual: boolean): SyncJob[] {
 			enabled: async () => finishSupported() && !!(await loadReadingSettings()).token && isEnabled(await loadFinishState(store), true),
 			run: async () => finishLine(await runFinish(manual ? 'now' : 'alarm')),
 		},
+		{
+			id: 'youtube',
+			name: 'YouTube',
+			enabled: () => isOn('youtube'),
+			run: async () => {
+				const r = await runYoutubeSync(makeYoutubeDeps(), manual ? 'manual' : 'alarm');
+				const st = await loadState(store, 'youtube');
+				if (r.stopped === 'no-source') return 'choose Watch later or a playlist in Settings';
+				if (st.signedOut) return 'sign in to YouTube in this browser';
+				if (r.stopped) return st.lastError ?? `stopped (${r.stopped})`;
+				return st.lastResult ?? `${r.sent} saved`;
+			},
+		},
 	];
+	return jobs.sort((a, b) => JOB_ORDER.indexOf(a.id as (typeof JOB_ORDER)[number]) - JOB_ORDER.indexOf(b.id as (typeof JOB_ORDER)[number]));
 }
 
 /**
@@ -136,7 +170,7 @@ export async function runAll(trigger: SequenceTrigger) {
 }
 
 /** Load older (one service) or the web's Finish now (the finish job only), under the same lock. */
-export function runOne(id: 'finish' | 'substack' | 'instagram', trigger: 'older' | 'finish-now') {
+export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trigger: 'older' | 'finish-now') {
 	const job = buildJobs(false).find((j) => j.id === id)!;
 	if (trigger === 'finish-now') {
 		// Works even with the finisher's own switch off, as Finish now always did.
@@ -151,6 +185,14 @@ export function runOne(id: 'finish' | 'substack' | 'instagram', trigger: 'older'
 		job.run = async () => {
 			const r = await runInstagramSync(makeDeps('instagram'), 'older');
 			return r.stopped ? (r.message ?? `stopped (${r.stopped})`) : `${r.sent} saved${r.message ? `. ${r.message}` : ''}`;
+		};
+	} else if (id === 'youtube') {
+		job.run = async () => {
+			const r = await runYoutubeSync(makeYoutubeDeps(), 'older');
+			const st = await loadState(store, 'youtube');
+			if (r.stopped === 'signed-out') return 'sign in to YouTube in this browser';
+			if (r.stopped) return st.lastError ?? `stopped (${r.stopped})`;
+			return st.lastResult ?? `${r.sent} saved`;
 		};
 	}
 	return runSequence([job], sequenceDeps, trigger, { recordRun: false });
@@ -178,7 +220,7 @@ export function initSyncRunner(): void {
 	});
 
 	browser.runtime.onMessage.addListener((request: unknown, sender: unknown, sendResponse: (r?: any) => void): true | undefined => {
-		const req = request as { action?: string; service?: SyncService; enabled?: boolean; kind?: string; frequency?: unknown };
+		const req = request as { action?: string; service?: SyncService; enabled?: boolean; kind?: string; frequency?: unknown; input?: unknown; change?: unknown };
 		if (!req || typeof req !== 'object') return undefined;
 		// Settings opens in a tab, so the page URL (not sender.tab) marks our own pages.
 		const fromSettings = ownPageSender(sender);
@@ -204,7 +246,7 @@ export function initSyncRunner(): void {
 				await scheduleAlarm(true);
 			})());
 		}
-		if (req.action === 'syncSetEnabled' && (req.service === 'substack' || req.service === 'instagram')) {
+		if (req.action === 'syncSetEnabled' && (req.service === 'substack' || req.service === 'instagram' || req.service === 'youtube')) {
 			if (!fromSettings) return undefined;
 			const service = req.service;
 			return reply((async () => {
@@ -213,8 +255,30 @@ export function initSyncRunner(): void {
 				await saveState(store, service, state);
 			})());
 		}
-		if (req.action === 'syncRun' && req.kind === 'older' && (req.service === 'substack' || req.service === 'instagram')) {
+		if (req.action === 'syncRun' && req.kind === 'older' && (req.service === 'substack' || req.service === 'instagram' || req.service === 'youtube')) {
 			return fromSettings ? reply(runOne(req.service, 'older')) : undefined;
+		}
+		// YouTube settings: check a pasted playlist (title or the reason it fails).
+		if (req.action === 'youtubeCheckPlaylist' && typeof req.input === 'string') {
+			if (!fromSettings) return undefined;
+			const input = req.input;
+			return reply(checkPlaylist(makeDeps('youtube'), input));
+		}
+		// YouTube settings: Watch later, the checked playlist, Include Shorts. Not while a run holds the state.
+		if (req.action === 'youtubeSetConfig' && req.change && typeof req.change === 'object') {
+			if (!fromSettings) return undefined;
+			const change = req.change as YoutubeConfigChange & { playlistInput?: string };
+			return reply((async () => {
+				const state = await loadState(store, 'youtube');
+				if (state.running && Date.now() - (state.lastAttemptAt ?? 0) < 15 * 60 * 1000) throw new Error('A YouTube sync is running. Try again when it ends.');
+				const next: YoutubeConfigChange = { watchLater: change.watchLater, includeShorts: change.includeShorts };
+				// A playlist is accepted only as a checked id plus its title; clearing sends null.
+				if (change.playlist === null) next.playlist = null;
+				else if (change.playlist && extractPlaylistId(change.playlist.id) && typeof change.playlist.title === 'string') next.playlist = { id: change.playlist.id, title: change.playlist.title };
+				applyYoutubeConfig(state, next);
+				await saveState(store, 'youtube', state);
+				return { hasSource: hasSource(state) };
+			})());
 		}
 		return undefined;
 	});

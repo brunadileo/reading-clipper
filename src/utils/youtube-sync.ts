@@ -263,10 +263,29 @@ export function ytConfig(state: SyncState): YoutubeConfig {
 	return cfg;
 }
 
-/** Pure: a source is changed, so its stored position no longer applies. */
-export function resetPlaylistCursor(cfg: YoutubeConfig): void {
-	cfg.cursors.pl = emptyCursor();
+export interface YoutubeConfigChange {
+	watchLater?: boolean;
+	includeShorts?: boolean;
+	// A checked playlist id and its title, or null to clear the playlist.
+	playlist?: { id: string; title: string } | null;
 }
+
+/** Pure: apply a settings change. A different playlist starts from its own first read. */
+export function applyYoutubeConfig(state: SyncState, change: YoutubeConfigChange): YoutubeConfig {
+	const cfg = ytConfig(state);
+	if (typeof change.watchLater === 'boolean') cfg.watchLater = change.watchLater;
+	if (typeof change.includeShorts === 'boolean') cfg.includeShorts = change.includeShorts;
+	if (change.playlist !== undefined) {
+		const next = change.playlist;
+		if ((next?.id ?? null) !== cfg.playlistId) cfg.cursors.pl = emptyCursor();
+		cfg.playlistId = next?.id ?? null;
+		cfg.playlistTitle = next?.title ?? '';
+	}
+	return cfg;
+}
+
+/** Pure: has the user chosen anything to read? */
+export const hasSource = (s: SyncState): boolean => !!s.youtube && (!!s.youtube.watchLater || !!s.youtube.playlistId);
 
 /** The warning shown before the first run. */
 export function costWarning(count: number): string {

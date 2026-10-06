@@ -107,6 +107,32 @@
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
 							</div>
+							<div class="lrs-row sync-service" data-service="youtube">
+								<span class="num">4</span>
+								<div class="main">
+									<div class="t">YouTube <span class="lr-tag">Experimental</span></div>
+									<div class="d">Videos from Watch later and one playlist you choose, with the transcript when Chrome can read it. Read only: your lists are never changed. Chrome asks to read your YouTube sign-in cookie once, so YouTube accepts the request for the next pages of a long list. The cookie stays in this browser. YouTube has no official way to do this, so it can stop working without notice.</div>
+									<div class="d" id="sync-youtube-status" role="status">Off</div>
+									<div class="lr-yt-extras" id="sync-youtube-extras" hidden>
+										<div class="lrs-row lr-yt-sub">
+											<div class="main"><div class="t">Watch later</div><div class="d">The first run takes the newest 100 you added.</div></div>
+											<div class="checkbox-container"><input type="checkbox" id="sync-youtube-wl" role="switch" aria-label="Read Watch later" /></div>
+										</div>
+										<div class="lrs-field">
+											<label for="sync-youtube-playlist">One playlist (link or id)</label>
+											<input type="text" id="sync-youtube-playlist" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/playlist?list=..." />
+											<span class="hint" id="sync-youtube-playlist-note">The first run takes the first 100 in the playlist's own order. A playlist that adds new videos at the bottom starts from its oldest.</span>
+											<button class="lrs-btn" id="sync-youtube-check" type="button">Check and save playlist</button>
+										</div>
+										<div class="lrs-row lr-yt-sub">
+											<div class="main"><div class="t">Include Shorts</div><div class="d">Off by default. Skipped Shorts are counted in the status line.</div></div>
+											<div class="checkbox-container"><input type="checkbox" id="sync-youtube-shorts" role="switch" aria-label="Include Shorts" /></div>
+										</div>
+									</div>
+									<button class="lrs-btn link" id="sync-youtube-older" type="button" hidden>Load 100 older videos</button>
+								</div>
+								<div class="checkbox-container"><input type="checkbox" id="sync-youtube-toggle" role="switch" aria-label="YouTube sync" /></div>
+							</div>
 						</div>
 						<p class="hint">These sites have no official way to do this, so a sync can stop working without notice.</p>
 					</section>

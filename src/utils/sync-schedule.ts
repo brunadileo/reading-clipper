@@ -18,6 +18,8 @@ export const MIN_INTERVAL_MINUTES = 60;
 export const STALE_RUN_MS = 15 * 60 * 1000;
 export const JOB_PAUSE_MS = 3000;
 export const SCHEDULE_KEY = 'sync:schedule';
+// The fixed order of the jobs (plan choice 26, READ-38 choice 4). New jobs go after existing ones.
+export const JOB_ORDER = ['substack', 'instagram', 'finish', 'youtube'] as const;
 
 const MINUTES: Record<Exclude<SyncFrequency, 'manual'>, number> = {
 	hourly: 60,

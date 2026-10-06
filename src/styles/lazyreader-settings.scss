@@ -307,6 +307,20 @@
 		}
 	}
 
+	// YouTube: the source choices sit inside its row.
+	.lr-yt-extras {
+		margin-top: 12px;
+
+		.lr-yt-sub {
+			padding: 8px 0;
+			border-bottom: none;
+		}
+
+		.lrs-field {
+			margin: 8px 0 4px;
+		}
+	}
+
 	a.lrs-row {
 		color: inherit;
 		text-decoration: none;

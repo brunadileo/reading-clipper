@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { continuationItem, continuationResponse, initialData, playlistPageHtml, vid, videoRow } from './fixtures/youtube/playlist';
 import {
-	ALARM_RUN_VIDEOS, MANUAL_RUN_VIDEOS, checkPlaylist, emptyYoutubeConfig, extractInitialData, extractPlaylistId,
+	ALARM_RUN_VIDEOS, MANUAL_RUN_VIDEOS, applyYoutubeConfig, checkPlaylist, hasSource, emptyYoutubeConfig, extractInitialData, extractPlaylistId,
 	parseContinuation, parsePlaylistPage, parseRows, parseYtcfg, runYoutubeSync, type YoutubeDeps,
 } from './youtube-sync';
 import { emptyState } from './sync-core';
@@ -378,5 +378,33 @@ describe('runYoutubeSync', () => {
 		const { deps, sent } = makeDeps({ route: ytRoute({ WL: { total: 2 } }), store });
 		await runYoutubeSync(deps, 'manual');
 		expect(sentIds(sent)).toEqual([`yt:${vid(1)}`]);
+	});
+});
+
+describe('applyYoutubeConfig', () => {
+	it('sets the switches and a checked playlist', () => {
+		const st = emptyState();
+		applyYoutubeConfig(st, { watchLater: true, includeShorts: true, playlist: { id: 'PLabcdefghijklmnop', title: 'Mix' } });
+		expect(st.youtube).toMatchObject({ watchLater: true, includeShorts: true, playlistId: 'PLabcdefghijklmnop', playlistTitle: 'Mix' });
+		expect(hasSource(st)).toBe(true);
+	});
+	it('a different playlist resets its cursor, the same one keeps it, Watch later is untouched', () => {
+		const st = emptyState();
+		applyYoutubeConfig(st, { playlist: { id: 'PLaaaaaaaaaaaa', title: 'A' } });
+		st.youtube!.cursors.pl = { older: 'tok', exhausted: false, started: true };
+		st.youtube!.cursors.wl = { older: 'wl', exhausted: false, started: true };
+		applyYoutubeConfig(st, { playlist: { id: 'PLaaaaaaaaaaaa', title: 'A2' } });
+		expect(st.youtube!.cursors.pl.older).toBe('tok');
+		applyYoutubeConfig(st, { playlist: { id: 'PLbbbbbbbbbbbb', title: 'B' } });
+		expect(st.youtube!.cursors.pl).toEqual({ older: null, exhausted: false, started: false });
+		expect(st.youtube!.cursors.wl.older).toBe('wl');
+		applyYoutubeConfig(st, { playlist: null });
+		expect(st.youtube).toMatchObject({ playlistId: null, playlistTitle: '' });
+	});
+	it('hasSource is false with nothing chosen', () => {
+		expect(hasSource(emptyState())).toBe(false);
+		const st = emptyState();
+		applyYoutubeConfig(st, { watchLater: false });
+		expect(hasSource(st)).toBe(false);
 	});
 });
