@@ -233,9 +233,12 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'you
 			return `${r.sent} saved, ${r.failed} could not be read${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 		};
 	} else if (id === 'medium') {
-		// Load older: Medium alone, under the shared lock.
+		// Load older: Medium, then finish in the same locked sequence, so the links just
+		// sent without text are filled right away.
 		job.enabled = () => isOn('medium');
 		job.run = async () => mediumLine(await runMedium('older'));
+		const finish = buildJobs(true).find((j) => j.id === 'finish')!;
+		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
 	} else if (id === 'instagram') {
 		job.run = async () => {
 			const r = await runInstagramSync(makeDeps('instagram'), 'older');

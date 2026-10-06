@@ -1,7 +1,8 @@
 // Settings section "Sync (experimental)": one schedule setting with one Sync now
-// button and one status line, then a switch per service with Load older. Turning a switch on asks Chrome for site access to
-// that service only (optional_host_permissions); turning it off keeps the
-// permission but stops the sync. Text is plain English, not i18n keys.
+// button and one status line, then a switch per service with its own Sync button
+// and Load older. Turning a switch on asks Chrome for site access to that service
+// only (optional_host_permissions), then shows any cost question; turning it off
+// keeps the permission but stops the sync. Text is plain English, not i18n keys.
 import browser from '../utils/browser-polyfill';
 import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
@@ -41,13 +42,12 @@ export function describeSyncStatus(service: SyncService, s: SyncState, now: numb
 	if (!s.enabled) return 'Off';
 	if (service === 'youtube' && !hasSource(s)) return 'Turned on. Choose Watch later or a playlist below.';
 	if (s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < 15 * 60 * 1000) return 'Syncing...';
-	const press = service === 'medium' ? 'Sync' : 'Sync now';
-	if (s.signedOut) return `Sign in to ${name} in this browser, then press ${press}.`;
+	if (s.signedOut) return `Sign in to ${name} in this browser, then press Sync.`;
 	if (s.lastError) return `Last sync failed: ${s.lastError}`;
 	if (s.lastSuccess === null) {
 		return service === 'medium'
 			? 'Turned on. It only runs when you press Sync here or Sync now above.'
-			: 'Turned on. Runs with the next sync, or press Sync now.';
+			: 'Turned on. Runs with the next sync, or press Sync.';
 	}
 	const mins = Math.max(0, Math.round((now - s.lastSuccess) / 60000));
 	const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
