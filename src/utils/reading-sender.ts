@@ -10,9 +10,9 @@ export interface ReadingCaptureBody {
 	title: string;
 	site_name: string;
 	text?: string;
-	// READ-37/39: where an automatic save came from. The server keeps only
-	// 'substack' and 'instagram'.
-	source?: 'substack' | 'instagram';
+	// READ-37/39/38: where an automatic save came from. The server keeps only
+	// 'substack', 'instagram' and 'youtube'.
+	source?: 'substack' | 'instagram' | 'youtube';
 	// READ-200: the channel, shown on the item page. The server keeps only the
 	// four values it allows a token client to name and stores 'token' otherwise.
 	via?: ReadingVia;
@@ -26,7 +26,7 @@ export interface BuildReadingCaptureBodyParams {
 	title: string;
 	siteName: string;
 	text: string;
-	source?: 'substack' | 'instagram';
+	source?: 'substack' | 'instagram' | 'youtube';
 	via?: ReadingVia;
 }
 

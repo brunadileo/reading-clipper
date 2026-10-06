@@ -12,8 +12,9 @@ import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '..
 const ORIGINS: Record<SyncService, string[]> = {
 	substack: ['https://substack.com/*', 'https://*.substack.com/*'],
 	instagram: ['https://www.instagram.com/*', 'https://i.instagram.com/*'],
+	youtube: ['https://www.youtube.com/*'],
 };
-const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram' };
+const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram', youtube: 'YouTube' };
 
 const store = {
 	async get(key: string) {

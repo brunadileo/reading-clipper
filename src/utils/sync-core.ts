@@ -2,7 +2,7 @@
 // Pure TypeScript with injected storage, fetch and timers, so the rules are
 // unit-testable. No browser API is imported here.
 
-export type SyncService = 'substack' | 'instagram';
+export type SyncService = 'substack' | 'instagram' | 'youtube';
 
 export interface SyncStore {
 	get(key: string): Promise<any>;
@@ -26,11 +26,34 @@ export interface SyncState {
 	// Instagram only (READ-181): the last attempt came from the shared schedule,
 	// whose one-hour floor then stands in for Instagram's own gate.
 	lastAttemptScheduled?: boolean;
+	// YouTube only (READ-38): which lists to read and where "Load older" continues.
+	youtube?: YoutubeConfig;
 	// 'signed-out' is a state, not an error: the settings page words it softly.
 	lastError: string | null;
 	signedOut: boolean;
 	lastResult: string | null;
 	running: boolean;
+}
+
+export interface YoutubeCursor {
+	// Continuation token for the next unread page of this list.
+	older: string | null;
+	exhausted: boolean;
+	// The list has had its first read (a list added later gets its own first run).
+	started: boolean;
+}
+
+export interface YoutubeConfig {
+	watchLater: boolean;
+	// Playlist id (PL...), null when none is chosen.
+	playlistId: string | null;
+	playlistTitle: string;
+	includeShorts: boolean;
+	cursors: { wl: YoutubeCursor; pl: YoutubeCursor };
+	// Set when YouTube refused transcripts in the last run (links only after that).
+	transcriptsBlockedAt: number | null;
+	// A plain note for the status line, e.g. "only the first 100 were read".
+	note: string | null;
 }
 
 export interface SyncPost {

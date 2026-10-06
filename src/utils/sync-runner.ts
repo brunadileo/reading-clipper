@@ -45,9 +45,10 @@ function makeDeps(service: SyncService): SyncDeps {
 				title: post.title,
 				siteName: post.siteName,
 				text: text ?? '',
-				// source stays for a server that predates `via`.
+				// source stays for a server that predates `via`. YouTube has no `via`
+				// value yet: the server shows it as a token save (plan choice 5).
 				source: service,
-				via: `${service}-saved`,
+				via: service === 'youtube' ? undefined : `${service}-saved`,
 			});
 			return postCapture(body, settings.captureUrl, settings.token);
 		},
