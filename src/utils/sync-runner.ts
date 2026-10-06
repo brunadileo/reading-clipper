@@ -203,8 +203,22 @@ export async function runAll(trigger: SequenceTrigger) {
 	return result;
 }
 
+/** Pure: the syncRun message the row Sync buttons send. All four services are accepted. */
+export function isRowSyncRequest(req: { action?: string; service?: unknown; kind?: unknown }): boolean {
+	return req.action === 'syncRun' && req.kind === 'now' && SYNC_SERVICES.includes(req.service as SyncService);
+}
+
 /** Load older (one service) or the web's Finish now (the finish job only), under the same lock. */
 export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'youtube', trigger: 'older' | 'finish-now' | 'finish-push' | 'now') {
+	if (trigger === 'now' && id !== 'finish') {
+		// A service row's own Sync (READ-250): that service as a manual run (Instagram keeps
+		// its one-hour gate), then finish, one locked sequence that leaves the schedule clock alone.
+		const manualJobs = buildJobs(true);
+		const job = manualJobs.find((j) => j.id === id)!;
+		job.enabled = () => isOn(id);
+		const finish = manualJobs.find((j) => j.id === 'finish')!;
+		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
+	}
 	const job = buildJobs(false).find((j) => j.id === id)!;
 	if (trigger === 'finish-now') {
 		// Works even with the finisher's own switch off, as Finish now always did.
@@ -219,11 +233,10 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'you
 			return `${r.sent} saved, ${r.failed} could not be read${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 		};
 	} else if (id === 'medium') {
-		// Load older, and the Medium row's own Sync: Medium alone, under the shared lock.
+		// Load older: Medium, then finish in the same locked sequence, so the links just
+		// sent without text are filled right away.
 		job.enabled = () => isOn('medium');
-		job.run = async () => mediumLine(await runMedium(trigger === 'older' ? 'older' : 'manual'));
-		// Then finish, in the same locked sequence, so the links just sent without
-		// text are filled right away (the global Sync now already does this).
+		job.run = async () => mediumLine(await runMedium('older'));
 		const finish = buildJobs(true).find((j) => j.id === 'finish')!;
 		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
 	} else if (id === 'instagram') {
@@ -305,9 +318,9 @@ export function initSyncRunner(): void {
 		if (req.action === 'syncRun' && req.kind === 'older' && SYNC_SERVICES.includes(req.service as SyncService)) {
 			return fromSettings ? reply(runOne(req.service as SyncService, 'older')) : undefined;
 		}
-		// The Medium row's own Sync button: Medium alone, never from the timer.
-		if (req.action === 'syncRun' && req.kind === 'now' && req.service === 'medium') {
-			return fromSettings ? reply(runOne('medium', 'now')) : undefined;
+		// A service row's own Sync button (READ-250): that service then finish, never from the timer.
+		if (req.action === 'syncRun' && isRowSyncRequest(req)) {
+			return fromSettings ? reply(runOne(req.service as SyncService, 'now')) : undefined;
 		}
 		// YouTube settings: check a pasted playlist (title or the reason it fails).
 		if (req.action === 'youtubeCheckPlaylist' && typeof req.input === 'string') {
