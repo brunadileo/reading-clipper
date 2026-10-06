@@ -381,19 +381,32 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(store.data[FINISH_KEY].attempts).toEqual({});
 	});
 
-	it('a transient answer ends transcript reads for the run and costs no attempt', async () => {
+	it('two unclear answers in a row end transcript reads for the run and cost no attempt', async () => {
 		const { deps, provided, store, transcriptCalls } = setup({
-			items: [video(1), video(2), item(3)],
+			items: [video(1), video(2), video(3), item(4)],
 			state: { attempts: { v1: 2 } },
 			transcript: () => ({ text: null, blocked: false, transient: true }),
 			pages: () => ({ status: 200, html: full() }),
 		});
 		const r = await runFinisher(deps, 'now');
-		expect(transcriptCalls).toEqual(['vid00000001']);
+		expect(transcriptCalls).toEqual(['vid00000001', 'vid00000002']);
 		expect(r.transcriptsBlocked).toBe(false);
 		expect(r.unreadable).toBe(0);
 		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 2 });
-		expect(provided).toEqual([{ id: 'i3', text: full() }]);
+		expect(store.data[FINISH_KEY].softMisses).toEqual({ v1: 1, v2: 1 });
+		expect(provided).toEqual([{ id: 'i4', text: full() }]);
+	});
+
+	it('three unclear answers for one video cost one attempt, so it still leaves the list in the end', async () => {
+		const { deps, store } = setup({
+			items: [video(1)],
+			state: { attempts: { v1: 2 }, softMisses: { v1: 2 } },
+			transcript: () => ({ text: null, blocked: false, transient: true }),
+		});
+		const r = await runFinisher(deps, 'now');
+		expect(r.unreadable).toBe(1);
+		expect(store.data[FINISH_KEY].attempts).toEqual({});
+		expect(store.data[FINISH_KEY].softMisses).toEqual({});
 	});
 
 	it('a blocked answer ends transcript reads for the run, costs no attempt, and articles still go', async () => {

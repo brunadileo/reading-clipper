@@ -34,8 +34,14 @@ export interface FinishState {
 	lastError: string | null;
 	// itemId -> failed attempts, pruned to the ids the last listWaiting returned.
 	attempts: Record<string, number>;
+	// itemId -> transcript reads that got no definite answer (timeouts, 5xx, empty body).
+	// SOFT_MISSES_PER_ATTEMPT of them cost one attempt, so a video that never answers
+	// clearly still leaves the list in the end. Optional: older saved states lack it.
+	softMisses?: Record<string, number>;
 	waitingCount: number | null;
 }
+
+const SOFT_MISSES_PER_ATTEMPT = 3;
 
 export const emptyFinishState = (): FinishState => ({
 	enabled: null,
@@ -45,6 +51,7 @@ export const emptyFinishState = (): FinishState => ({
 	lastResult: null,
 	lastError: null,
 	attempts: {},
+	softMisses: {},
 	waitingCount: null,
 });
 
@@ -188,6 +195,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 		guard(listed);
 		if (!listed.ok) throw new StopRun('error', listed.error || 'Could not read the waiting list');
 		state.attempts = pruneAttempts(state.attempts, listed.items);
+		state.softMisses = pruneAttempts(state.softMisses ?? {}, listed.items);
 		state.waitingCount = listed.items.length;
 		await saveFinishState(deps.store, state);
 
@@ -207,6 +215,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 
 		let first = true;
 		let transcriptsOff = false;
+		let unclearInRow = 0;
 		for (const item of todo) {
 			if (!first) await deps.sleep(jitter(deps, 2000, 4000));
 			first = false;
@@ -226,11 +235,21 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 						try {
 							const t = await deps.readTranscript!(videoId);
 							text = t.text;
-							if (t.blocked || t.transient) { definite = false; transcriptsOff = true; }
-							if (t.blocked) result.transcriptsBlocked = true;
+							if (t.blocked) { definite = false; transcriptsOff = true; result.transcriptsBlocked = true; }
+							else if (t.transient) definite = false;
 						} catch {
 							definite = false;
-							transcriptsOff = true;
+						}
+						// Two unclear answers in a row look like an outage: stop reading for this run.
+						// One alone may be this video, so the next item still gets its read.
+						if (definite || text) unclearInRow = 0;
+						else if (!transcriptsOff && ++unclearInRow >= 2) transcriptsOff = true;
+						if (!definite && !text && !result.transcriptsBlocked) {
+							const misses = (state.softMisses![item.id] ?? 0) + 1;
+							if (misses >= SOFT_MISSES_PER_ATTEMPT) {
+								delete state.softMisses![item.id];
+								definite = true; // counts as one attempt below
+							} else state.softMisses![item.id] = misses;
 						}
 					}
 					if (text) {

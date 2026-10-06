@@ -224,6 +224,12 @@ describe('readYouTubeTranscript', () => {
 		expect(await readYouTubeTranscript(fn, VIDEO)).toEqual({ text: null, blocked: false, transient: true });
 	});
 
+	it('one failing client plus one that says "no captions" is a definite miss', async () => {
+		let n = 0;
+		const { fn } = fakeYt((url) => (url.includes('/watch?v=') ? { text: WATCH } : isPlayer(url) ? (n++ === 0 ? { status: 403 } : { json: playerWith([]) }) : undefined));
+		expect(await readYouTubeTranscript(fn, 'abcdefghijk')).toEqual({ text: null, blocked: false });
+	});
+
 	it('definite misses are not transient', async () => {
 		const none = fakeYt((url) => (url.includes('/watch?v=') ? { text: WATCH } : isPlayer(url) ? { json: playerWith([]) } : undefined));
 		expect((await readYouTubeTranscript(none.fn, 'abcdefghijk')).transient).toBeUndefined();

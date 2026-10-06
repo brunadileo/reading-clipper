@@ -197,6 +197,9 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 			return null;
 		});
 		let transient = false;
+		// A client that answered OK with no usable track is a definite "no captions",
+		// even when another client failed: one flaky client must not keep a video waiting forever.
+		let sawNoTrack = false;
 		for (const pc of PLAYER_CLIENTS) {
 			try {
 				const res = await get(fetchFn, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
@@ -222,7 +225,7 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 				}
 				const renderer = data?.captions?.playerCaptionsTracklistRenderer;
 				const track = pc.fallback ? pickFallbackTrack(renderer) : pickCaptionTrack(renderer);
-				if (!track?.baseUrl || !isYouTubeHost(track.baseUrl)) continue;
+				if (!track?.baseUrl || !isYouTubeHost(track.baseUrl)) { sawNoTrack = true; continue; }
 				const transcript = await fetchCaptionText(fetchFn, track.baseUrl);
 				if (!transcript.trim()) {
 					// A caption track that comes back empty is a bad answer, not "no captions".
@@ -237,7 +240,7 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 				transient = true;
 			}
 		}
-		return transient ? { text: null, blocked: false, transient: true } : { text: null, blocked: false };
+		return transient && !sawNoTrack ? { text: null, blocked: false, transient: true } : { text: null, blocked: false };
 	} catch (e) {
 		return e instanceof Blocked ? { text: null, blocked: true } : { text: null, blocked: false, transient: true };
 	}
