@@ -16,7 +16,7 @@
 //   Beyond 20 items the list page is opened in a minimized window and scrolled
 //   so Medium's own JS pages it (openListAndCollect, injected).
 import {
-	MAX_ATTEMPTS, countWords, jitter, loadState, saveState,
+	MAX_ATTEMPTS, countWords, isTransientSend, jitter, loadState, saveState, sendWithRetry,
 	type SyncDeps, type SyncPost, type SyncState,
 } from './sync-core';
 import { MIN_WORDS } from './substack-sync';
@@ -381,11 +381,11 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 				if (e instanceof StopRun) throw e;
 				text = undefined; // SkipText or any read error: the link alone
 			}
-			const sent = await deps.send(post, text);
+			const sent = await sendWithRetry(deps, post, text);
 			if (sent.status === 401) throw new StopRun('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
-			if (sent.status === 429 || (sent.status ?? 0) >= 500 || (!sent.ok && sent.status === undefined)) {
-				throw new StopRun('error', sent.error || 'Lazy Reader could not be reached. Try again later.');
-			}
+			// Still no good answer after the retries: stop. Pending and state are saved, so the next Sync continues here.
+			if (isTransientSend(sent)) throw new StopRun('error', `Lazy Reader did not answer (status ${sent.status ?? 'none'}). Press Sync to continue.`);
+			if (sent.status === 429) throw new StopRun('error', sent.error || 'Lazy Reader could not be reached. Try again later.');
 			if (!sent.ok) {
 				state.failed[post.id] = (state.failed[post.id] ?? 0) + 1;
 				result.failed++;

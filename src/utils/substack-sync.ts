@@ -9,7 +9,7 @@
 //          publication: { name } } }], nextCursor }
 //   GET <canonical origin>/api/v1/posts/<slug> -> { body_html }
 import {
-	MAX_ATTEMPTS, countWords, htmlToText, jitter, loadState, looksLikeLoginPage, saveState,
+	MAX_ATTEMPTS, countWords, htmlToText, jitter, loadState, looksLikeLoginPage, saveState, sendWithRetry,
 	type SyncDeps, type SyncPost, type SyncState,
 } from './sync-core';
 
@@ -201,7 +201,7 @@ export async function runSubstackSync(deps: SyncDeps, kind: SubstackRunKind): Pr
 				await saveState(deps.store, 'substack', state);
 				continue;
 			}
-			const sent = await deps.send(post, text);
+			const sent = await sendWithRetry(deps, post, text);
 			if (sent.status === 401) throw new StopRun('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
 			if (sent.status === 429 || (sent.status ?? 0) >= 500 || (!sent.ok && sent.status === undefined)) {
 				throw new StopRun('error', sent.error || 'Lazy Reader could not be reached. Next run retries.');

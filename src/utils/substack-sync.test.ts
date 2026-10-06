@@ -157,6 +157,15 @@ describe('runSubstackSync', () => {
 		expect(store.data['sync:substack'].lastError).toMatch(/token/i);
 	});
 
+	it('a 520 from Lazy Reader is retried and the post goes through', async () => {
+		const { deps, sent, sleeps } = makeDeps({ route: pagedRoute(1), store: enabled(), sends: [{ ok: false, status: 520 }, { ok: true, status: 200 }] });
+		const r = await runSubstackSync(deps, 'manual');
+		expect(r.stopped).toBeNull();
+		expect(r.sent).toBe(1);
+		expect(sent).toHaveLength(2);
+		expect(sleeps).toContain(3000);
+	});
+
 	it('requests credentials from the browser and never reads a cookie', async () => {
 		const inits: any[] = [];
 		const route: Route = (url, init) => { inits.push(init); return pagedRoute(1)(url, init); };
