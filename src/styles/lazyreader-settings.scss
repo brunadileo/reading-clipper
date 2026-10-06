@@ -290,8 +290,19 @@
 			white-space: nowrap;
 		}
 
-		.lr-btn-link {
-			margin-top: 4px;
+		// Row actions (Sync, Load older, Allow access) sit on one line under the text,
+		// with the design system's small gap between them.
+		.lr-row-actions {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: var(--stack-sm);
+			margin-top: var(--stack-sm);
+
+			// No empty band when every action in the row is hidden.
+			&:not(:has(> :not([hidden]))) {
+				display: none;
+			}
 		}
 
 		// A row with a trailing switch: the switch sits in the last column.
