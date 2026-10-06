@@ -307,7 +307,12 @@
 		}
 	}
 
-	// YouTube: the source choices sit inside its row.
+	// YouTube: the source choices sit inside its row, so the row grows tall.
+	// Its own switch stays at the top, next to the title, not centred on the whole block.
+	.sync-service[data-service="youtube"] {
+		align-items: flex-start;
+	}
+
 	.lr-yt-extras {
 		margin-top: 12px;
 
