@@ -1403,6 +1403,19 @@ async function refreshContentWithScroll(noteContentField: HTMLTextAreaElement, n
 	}
 }
 
+const AUTO_CLOSE_MS = 1500;
+
+// The popup closes itself after a save, unless the pointer or focus reaches the
+// saved card first: then Open in Lazy Reader and Done stay clickable (READ-236).
+export function scheduleAutoClose(): void {
+	const timer = setTimeout(() => window.close(), AUTO_CLOSE_MS);
+	const card = document.getElementById('reading-status');
+	if (!card) return;
+	const cancel = () => clearTimeout(timer);
+	card.addEventListener('mouseenter', cancel, { once: true });
+	card.addEventListener('focusin', cancel, { once: true });
+}
+
 let readingSaveInFlight = false;
 
 async function handleClipObsidian(): Promise<void> {
@@ -1462,7 +1475,7 @@ async function handleClipObsidian(): Promise<void> {
 			const wasCut = body.text?.endsWith(READING_TEXT_CUT_NOTE) ?? false;
 			showReadingSuccess(result.data?.readUrl, getMessage(wasCut ? 'savedToReadingCut' : 'savedToReading'));
 			if (!isSidePanel) {
-				setTimeout(() => window.close(), 1500);
+				scheduleAutoClose();
 			}
 		} else if (result.status === 401) {
 			// No token, or the server rejected it: offer the explicit connect.

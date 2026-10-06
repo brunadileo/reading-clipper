@@ -37,6 +37,13 @@
 	--background-primary:transparent;
 }
 
+// READ-236: the popup is as tall as its content (Chrome sizes the window to the
+// body), so no empty band shows under the foot. The side panel keeps full height.
+#popup:not(.is-side-panel):not(.is-embedded) {
+	height: auto;
+	min-height: 0;
+}
+
 #popup {
 	scrollbar-width: none;
 	height: max(var(--popup-height), 100vh);

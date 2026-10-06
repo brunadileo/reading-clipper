@@ -158,7 +158,7 @@ def run(args):
         for scheme in schemes:
             for name, (page_file, frag, token, tab_url, capture, width) in states().items():
                 if wanted and name not in wanted: continue
-                ctx = browser.new_context(viewport={"width": width, "height": 520 if width == 360 else 900}, color_scheme=scheme, device_scale_factor=2)
+                ctx = browser.new_context(viewport={"width": width, "height": 100 if width == 360 else 900}, color_scheme=scheme, device_scale_factor=2)
                 cfg = {"local": {"readingToken": "a" * 48} if token else {}, "tabUrl": tab_url, "title": FIXTURE_TITLE, "text": FIXTURE_TEXT, "version": version, "capture": capture}
                 ctx.add_init_script(STUB.replace("%CFG%", json.dumps(cfg)))
                 page = ctx.new_page()

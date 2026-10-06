@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
 const STATUS_DOM = `
 	<div class="clipper"></div>
@@ -58,5 +58,38 @@ describe('reading status screen (READ-233, READ-236)', () => {
 		expect(el('reading-status').dataset.state).toBe('signin');
 		expect(el('reading-sign-in').style.display).toBe('inline-flex');
 		expect(el('reading-try-again').style.display).toBe('none');
+	});
+});
+
+describe('auto-close after a save (READ-236)', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		(window as any).close = vi.fn();
+	});
+	afterEach(() => vi.useRealTimers());
+
+	it('closes after 1.5 s when untouched', async () => {
+		const { scheduleAutoClose } = await import('./popup');
+		scheduleAutoClose();
+		vi.advanceTimersByTime(1499);
+		expect(window.close).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(2);
+		expect(window.close).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not close after the pointer enters the card', async () => {
+		const { scheduleAutoClose } = await import('./popup');
+		scheduleAutoClose();
+		el('reading-status').dispatchEvent(new MouseEvent('mouseenter'));
+		vi.advanceTimersByTime(5000);
+		expect(window.close).not.toHaveBeenCalled();
+	});
+
+	it('does not close after focus moves inside the card', async () => {
+		const { scheduleAutoClose } = await import('./popup');
+		scheduleAutoClose();
+		el('reading-done').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+		vi.advanceTimersByTime(5000);
+		expect(window.close).not.toHaveBeenCalled();
 	});
 });
