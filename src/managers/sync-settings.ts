@@ -334,6 +334,8 @@ export function initializeSyncSettings(): void {
 		(document.querySelector('.sync-service[data-service="medium"]') as HTMLElement | null)?.style.setProperty('display', 'none');
 		const num = document.getElementById('finish-num');
 		if (num && !IS_STORE_BUILD) num.textContent = '3';
+		const ytNum = document.getElementById('youtube-num');
+		if (ytNum && !IS_STORE_BUILD) ytNum.textContent = '4';
 	}
 	SERVICES.forEach(setupService);
 	// Background runs change the saved state while this page is open.

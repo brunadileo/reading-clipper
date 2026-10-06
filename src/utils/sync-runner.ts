@@ -225,7 +225,7 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'you
 		// Then finish, in the same locked sequence, so the links just sent without
 		// text are filled right away (the global Sync now already does this).
 		const finish = buildJobs(true).find((j) => j.id === 'finish')!;
-		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false });
+		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
 	} else if (id === 'instagram') {
 		job.run = async () => {
 			const r = await runInstagramSync(makeDeps('instagram'), 'older');
