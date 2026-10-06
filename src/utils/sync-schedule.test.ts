@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { memoryStore } from './sync-test-helpers';
 import {
-	intervalMinutes, isDue, isOwnPageSender, isRunning, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
+	intervalMinutes, isDue, isOwnPageSender, isRunning, manualOnly, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
 	JOB_ORDER, JOB_PAUSE_MS, PENDING_WAKE_KEY, SCHEDULE_KEY, markPendingWake, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
 } from './sync-schedule';
 
@@ -139,8 +139,8 @@ describe('sequence', () => {
 	});
 });
 
-describe('four jobs with YouTube (READ-38)', () => {
-	const names: Record<string, string> = { substack: 'Substack', instagram: 'Instagram', finish: 'Finish waiting articles', youtube: 'YouTube' };
+describe('five jobs with Medium and YouTube (READ-38, READ-36)', () => {
+	const names: Record<string, string> = { substack: 'Substack', instagram: 'Instagram', medium: 'Medium', finish: 'Finish waiting articles', youtube: 'YouTube' };
 	const four = (h: ReturnType<typeof harness>, log: string[], steps: string[], over: Record<string, Partial<SyncJob> & { fail?: boolean }> = {}): SyncJob[] =>
 		JOB_ORDER.map((id) => ({
 			...job(id, log, over[id] ?? {}),
@@ -150,26 +150,26 @@ describe('four jobs with YouTube (READ-38)', () => {
 				: async () => { steps.push(describeScheduleStatus(await loadSchedule(h.store), h.now())); log.push(id); return 'ok'; },
 		}));
 
-	it('runs YouTube fourth, after Substack, Instagram and finish', () => {
-		expect(JOB_ORDER).toEqual(['substack', 'instagram', 'finish', 'youtube']);
+	it('runs Medium before finish and YouTube last', () => {
+		expect(JOB_ORDER).toEqual(['substack', 'instagram', 'medium', 'finish', 'youtube']);
 	});
-	it('shows "4 of 4: YouTube" and never overlaps the others', async () => {
+	it('shows "5 of 5: YouTube" and never overlaps the others', async () => {
 		const h = harness();
 		const log: string[] = [];
 		const steps: string[] = [];
 		await runSequence(four(h, log, steps), h.deps, 'now');
-		expect(log).toEqual(['substack', 'instagram', 'finish', 'youtube']);
-		expect(steps).toEqual(['1 of 4: Substack', '2 of 4: Instagram', '3 of 4: Finish waiting articles', '4 of 4: YouTube']);
-		expect(h.sleeps).toEqual([JOB_PAUSE_MS, JOB_PAUSE_MS, JOB_PAUSE_MS]);
+		expect(log).toEqual(['substack', 'instagram', 'medium', 'finish', 'youtube']);
+		expect(steps).toEqual(['1 of 5: Substack', '2 of 5: Instagram', '3 of 5: Medium', '4 of 5: Finish waiting articles', '5 of 5: YouTube']);
+		expect(h.sleeps).toEqual([JOB_PAUSE_MS, JOB_PAUSE_MS, JOB_PAUSE_MS, JOB_PAUSE_MS]);
 	});
 	it('a failing YouTube job is recorded and does not stop a job that comes after it', async () => {
 		const h = harness();
 		const log: string[] = [];
-		const later = job('medium', log);
+		const later = job('extra', log);
 		const jobs = [...four(h, log, [], { youtube: { fail: true } }), later];
 		const res = await runSequence(jobs, h.deps, 'now');
-		expect(log).toEqual(['substack', 'instagram', 'finish', 'fail:youtube', 'start:medium', 'end:medium']);
-		expect(res.ran.map((r) => r.ok)).toEqual([true, true, true, false, true]);
+		expect(log).toEqual(['substack', 'instagram', 'medium', 'finish', 'fail:youtube', 'start:extra', 'end:extra']);
+		expect(res.ran.map((r) => r.ok)).toEqual([true, true, true, true, false, true]);
 		expect((await loadSchedule(h.store)).lastSummary).toContain('YouTube: failed, refused');
 	});
 	it('a failing job before YouTube does not skip it', async () => {
@@ -185,6 +185,51 @@ describe('four jobs with YouTube (READ-38)', () => {
 		expect((await runSequence(only, h.deps, 'alarm')).ran.map((r) => r.id)).toEqual(['youtube']);
 		// Inside the interval a scheduled trigger does nothing.
 		expect((await runSequence(only, h.deps, 'idle')).skipped).toBe('not-due');
+	});
+});
+
+describe('Medium job (button-only, READ-36)', () => {
+	// The order buildJobs uses: substack, instagram, medium, finish, youtube.
+	const jobs = (manual: boolean, log: string[], over: { mediumFails?: boolean; mediumOn?: boolean } = {}): SyncJob[] => [
+		job('substack', log),
+		job('instagram', log),
+		job('medium', log, { enabled: manualOnly(manual, async () => over.mediumOn ?? true), fail: over.mediumFails }),
+		job('finish', log),
+		job('youtube', log),
+	];
+	it('an alarm, idle or startup run skips Medium', async () => {
+		for (const trig of ['alarm', 'idle', 'startup'] as const) {
+			const h = harness({ [SCHEDULE_KEY]: { frequency: 'hourly', lastRunAt: null } });
+			const log: string[] = [];
+			await runSequence(jobs(false, log), h.deps, trig);
+			expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:finish', 'end:finish', 'start:youtube', 'end:youtube']);
+		}
+	});
+	it('Sync now runs Medium after Instagram and before finish', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence(jobs(true, log), h.deps, 'now');
+		expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:medium', 'end:medium', 'start:finish', 'end:finish', 'start:youtube', 'end:youtube']);
+	});
+	it('a switch that is off keeps Medium out even on Sync now', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence(jobs(true, log, { mediumOn: false }), h.deps, 'now');
+		expect(log).not.toContain('start:medium');
+	});
+	it('a failing Medium job does not stop finish', async () => {
+		const h = harness();
+		const log: string[] = [];
+		const res = await runSequence(jobs(true, log, { mediumFails: true }), h.deps, 'now');
+		expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:medium', 'fail:medium', 'start:finish', 'end:finish', 'start:youtube', 'end:youtube']);
+		expect(res.ran.map((r) => r.ok)).toEqual([true, true, false, true, true]);
+	});
+	it('Load older and the row Sync run Medium then finish, and leave the schedule clock alone', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence([job('medium', log), job('finish', log)], h.deps, 'older', { recordRun: false });
+		expect(log).toEqual(['start:medium', 'end:medium', 'start:finish', 'end:finish']);
+		expect((await loadSchedule(h.store)).lastRunAt).toBeNull();
 	});
 });
 

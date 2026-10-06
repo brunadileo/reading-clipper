@@ -97,8 +97,19 @@
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
 							</div>
+							<div class="lr-row sync-service" data-service="medium">
+								<span class="lr-row-lead lr-num">3</span>
+								<div class="lr-row-body">
+									<div class="lr-row-title">Medium <span class="lr-pill lr-pill-neutral">Experimental</span></div>
+									<div class="lr-row-sub">Your Reading list and your own lists, read in your signed-in browser. Only when you press a button, never on the timer. Each article is read here and sent with its text. Medium has no official way to do this and its terms limit browser add-ons, so turn it on at your own risk.</div>
+									<div class="lr-row-sub" id="sync-medium-status" role="status">Off</div>
+									<button class="lr-btn lr-btn-secondary" id="sync-medium-run" type="button" hidden>Sync</button>
+									<button class="lr-btn lr-btn-link" id="sync-medium-older" type="button" hidden>Load 100 older saves</button>
+								</div>
+								<div class="checkbox-container"><input type="checkbox" id="sync-medium-toggle" role="switch" aria-label="Medium sync" /></div>
+							</div>
 							<div class="lr-row sync-service" data-service="finish">
-								<span class="lr-row-lead lr-num" id="finish-num">3</span>
+								<span class="lr-row-lead lr-num" id="finish-num">4</span>
 								<div class="lr-row-body">
 									<div class="lr-row-title">Finish waiting articles</div>
 									<div class="lr-row-sub">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what the steps above just saved. Chrome asks once for access to the sites you save from.</div>
@@ -110,7 +121,7 @@
 								<div class="checkbox-container"><input type="checkbox" id="finish-toggle" role="switch" aria-label="Finish waiting articles" /></div>
 							</div>
 							<div class="lr-row sync-service" data-service="youtube">
-								<span class="lr-row-lead lr-num">4</span>
+								<span class="lr-row-lead lr-num" id="youtube-num">5</span>
 								<div class="lr-row-body">
 									<div class="lr-row-title">YouTube <span class="lr-pill lr-pill-neutral">Experimental</span></div>
 									<div class="lr-row-sub">Saves videos from Watch later and one playlist you choose. Only the video links, and the transcripts Chrome could read, go to Lazy Reader. Read only: your lists are never changed. Chrome asks to read your YouTube sign-in cookie once, so YouTube accepts the request for the next pages of a long list. The cookie stays in this browser. YouTube has no official way to do this, so it can stop working without notice.</div>

@@ -1,8 +1,8 @@
-// Shared pieces of the Substack and Instagram syncs (READ-37, READ-39).
+// Shared pieces of the Substack, Instagram and Medium syncs (READ-37, READ-39, READ-36).
 // Pure TypeScript with injected storage, fetch and timers, so the rules are
 // unit-testable. No browser API is imported here.
 
-export type SyncService = 'substack' | 'instagram' | 'youtube';
+export type SyncService = 'substack' | 'instagram' | 'youtube' | 'medium';
 
 export interface SyncStore {
 	get(key: string): Promise<any>;
@@ -28,6 +28,9 @@ export interface SyncState {
 	lastAttemptScheduled?: boolean;
 	// YouTube only (READ-38): which lists to read and where "Load older" continues.
 	youtube?: YoutubeConfig;
+	// Medium only (READ-36): per own list, how many items Load older has seen and
+	// whether the whole list is in. Medium has no single cursor.
+	lists?: Record<string, { seen: number; exhausted: boolean; stalls?: number }>;
 	// 'signed-out' is a state, not an error: the settings page words it softly.
 	lastError: string | null;
 	signedOut: boolean;
