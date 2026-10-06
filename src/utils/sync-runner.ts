@@ -152,7 +152,7 @@ export function runOne(id: 'finish' | 'substack' | 'instagram', trigger: 'older'
 		job.enabled = async () => finishSupported();
 		job.run = async () => finishLine(await runFinish('now'));
 	} else if (trigger === 'finish-push') {
-		// A wake from the server: finish only, with its own 60 s gap; keeps the finisher's switch.
+		// A wake from the server: finish only, no gap; keeps the finisher's switch.
 		job.run = async () => finishLine(await runFinish('push'));
 	} else if (id === 'substack') {
 		job.run = async () => {
@@ -186,7 +186,8 @@ export function initSyncRunner(): void {
 		void scheduleAlarm(false).then(() => runAll('startup'));
 	});
 	browser.runtime.onInstalled.addListener(() => {
-		void scheduleAlarm(false);
+		// force: loadSchedule may just have moved Twice a day to Every hour (READ-247), so the old 12 h alarm must go.
+		void scheduleAlarm(true);
 	});
 
 	browser.runtime.onMessage.addListener((request: unknown, sender: unknown, sendResponse: (r?: any) => void): true | undefined => {

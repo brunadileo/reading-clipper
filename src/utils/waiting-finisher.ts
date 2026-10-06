@@ -14,8 +14,6 @@ export const STALE_LOCK_MS = 15 * 60 * 1000;
 export const AUTO_LIMIT = 10;
 export const NOW_LIMIT = 20;
 export const MAX_ITEM_ATTEMPTS = 3;
-// READ-247: a push wake skips the 10 minute gap but keeps this one.
-export const PUSH_MIN_GAP_MS = 60 * 1000;
 // Automatic runs try an item at most once an hour; Sync now and web Finish now try everything.
 export const ITEM_RETRY_MS = 60 * 60 * 1000;
 export const MAX_HTML_BYTES = 5_000_000;
@@ -115,9 +113,9 @@ export function shouldRun(trigger: FinishTrigger, state: FinishState, hasToken: 
 	if (!hasAccess) return 'no-access';
 	if (trigger !== 'now' && !isEnabled(state, hasToken)) return 'disabled';
 	if (state.running && state.lastAttemptAt !== null && now - state.lastAttemptAt < STALE_LOCK_MS) return 'busy';
-	if (trigger !== 'now' && trigger !== 'wake-rerun') {
-		const gap = trigger === 'push' ? PUSH_MIN_GAP_MS : AUTO_MIN_GAP_MS;
-		if (state.lastAttemptAt !== null && now - state.lastAttemptAt < gap) return 'throttled';
+	// A push wake or its rerun has no gap: the 20 s collect pause and the hourly per-item rule hold it back.
+	if (trigger !== 'now' && trigger !== 'wake-rerun' && trigger !== 'push') {
+		if (state.lastAttemptAt !== null && now - state.lastAttemptAt < AUTO_MIN_GAP_MS) return 'throttled';
 	}
 	return null;
 }
