@@ -14,6 +14,10 @@ export const STALE_LOCK_MS = 15 * 60 * 1000;
 export const AUTO_LIMIT = 10;
 export const NOW_LIMIT = 20;
 export const MAX_ITEM_ATTEMPTS = 3;
+// READ-247: a push wake skips the 10 minute gap but keeps this one.
+export const PUSH_MIN_GAP_MS = 60 * 1000;
+// Automatic runs try an item at most once an hour; Sync now and web Finish now try everything.
+export const ITEM_RETRY_MS = 60 * 60 * 1000;
 export const MAX_HTML_BYTES = 5_000_000;
 
 // READ-48: the store build asks for these sites at run time (optional host
@@ -21,7 +25,9 @@ export const MAX_HTML_BYTES = 5_000_000;
 // finisher skips quietly.
 export const FINISH_ORIGINS = ['https://*/*', 'http://*/*'];
 
-export type FinishTrigger = 'startup' | 'idle' | 'alarm' | 'now';
+// 'push' = a wake from the server; 'wake-rerun' = the one rerun at the end of a
+// sequence that a wake found busy (no gap, the hourly per-item rule still applies).
+export type FinishTrigger = 'startup' | 'idle' | 'alarm' | 'now' | 'push' | 'wake-rerun';
 
 export interface FinishState {
 	// null = default: on once a token is set.
@@ -33,6 +39,8 @@ export interface FinishState {
 	lastError: string | null;
 	// itemId -> failed attempts, pruned to the ids the last listWaiting returned.
 	attempts: Record<string, number>;
+	// itemId -> when an automatic run last tried it, pruned like attempts.
+	triedAt: Record<string, number>;
 	waitingCount: number | null;
 }
 
@@ -44,6 +52,7 @@ export const emptyFinishState = (): FinishState => ({
 	lastResult: null,
 	lastError: null,
 	attempts: {},
+	triedAt: {},
 	waitingCount: null,
 });
 
@@ -106,14 +115,17 @@ export function shouldRun(trigger: FinishTrigger, state: FinishState, hasToken: 
 	if (!hasAccess) return 'no-access';
 	if (trigger !== 'now' && !isEnabled(state, hasToken)) return 'disabled';
 	if (state.running && state.lastAttemptAt !== null && now - state.lastAttemptAt < STALE_LOCK_MS) return 'busy';
-	if (trigger !== 'now' && state.lastAttemptAt !== null && now - state.lastAttemptAt < AUTO_MIN_GAP_MS) return 'throttled';
+	if (trigger !== 'now' && trigger !== 'wake-rerun') {
+		const gap = trigger === 'push' ? PUSH_MIN_GAP_MS : AUTO_MIN_GAP_MS;
+		if (state.lastAttemptAt !== null && now - state.lastAttemptAt < gap) return 'throttled';
+	}
 	return null;
 }
 
 /** Pure: which attempts survive a fresh listWaiting. */
-export function pruneAttempts(attempts: Record<string, number>, items: WaitingItem[]): Record<string, number> {
+export function pruneAttempts<T>(attempts: Record<string, T>, items: WaitingItem[]): Record<string, T> {
 	const ids = new Set(items.map((i) => i.id));
-	const out: Record<string, number> = {};
+	const out: Record<string, T> = {};
 	for (const [id, n] of Object.entries(attempts)) if (ids.has(id)) out[id] = n;
 	return out;
 }
@@ -170,6 +182,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 		guard(listed);
 		if (!listed.ok) throw new StopRun('error', listed.error || 'Could not read the waiting list');
 		state.attempts = pruneAttempts(state.attempts, listed.items);
+		state.triedAt = pruneAttempts(state.triedAt ?? {}, listed.items);
 		state.waitingCount = listed.items.length;
 		await saveFinishState(deps.store, state);
 
@@ -186,11 +199,18 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 		};
 
 		let first = true;
-		for (const item of listed.items.slice(0, limit)) {
+		// Automatic runs leave an item alone for an hour after the last try.
+		const auto = trigger !== 'now';
+		const eligible = auto
+			? listed.items.filter((i) => { const t = state.triedAt[i.id]; return t === undefined || deps.now() - t >= ITEM_RETRY_MS; })
+			: listed.items;
+		for (const item of eligible.slice(0, limit)) {
 			if (!first) await deps.sleep(jitter(deps, 2000, 4000));
 			first = false;
 			// Heartbeat: a long run keeps its lock fresh (stale after 15 min).
 			state.lastAttemptAt = deps.now();
+
+			state.triedAt[item.id] = deps.now();
 
 			// A link we must not open is given up on without a fetch.
 			if (!isSafeFetchUrl(item.url) || (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) {
