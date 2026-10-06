@@ -106,9 +106,12 @@ describe('parsers', () => {
 		expect(continuationItem('t').continuationItemRenderer).toBeDefined();
 	});
 
-	it('signed out: LOGGED_IN false, or no ytInitialData', () => {
+	it('signed out is LOGGED_IN false; no ytInitialData without it is a blocked check', () => {
 		expect(parsePlaylistPage(playlistPageHtml([], { loggedIn: false })).signedOut).toBe(true);
-		expect(parsePlaylistPage(playlistPageHtml([], { noData: true })).signedOut).toBe(true);
+		expect(parsePlaylistPage(playlistPageHtml([], { loggedIn: false, noData: true })).signedOut).toBe(true);
+		const blocked = parsePlaylistPage(playlistPageHtml([], { loggedIn: null, noData: true }));
+		expect(blocked).toMatchObject({ signedOut: false, blocked: true });
+		expect(parsePlaylistPage(playlistPageHtml([videoRow(1)], { loggedIn: null }))).toMatchObject({ signedOut: false, blocked: false });
 	});
 
 	it('extracts a playlist id from a link or a bare id', () => {
@@ -230,6 +233,28 @@ describe('runYoutubeSync', () => {
 		expect(new Set(sentIds(sent)).size).toBe(250);
 	});
 
+	it('Load older with a refused stored token walks again from page 1, skipping known ids', async () => {
+		const inner = ytRoute({ WL: { total: 250 } });
+		const { deps, store, sent } = makeDeps({ route: ytRoute({ WL: { total: 250 } }), store: enabled() });
+		await runYoutubeSync(deps, 'manual'); // first 100 sent, cursor WL:1
+		expect(sent).toHaveLength(100);
+		const stale = store.data['sync:youtube'].youtube.cursors.wl;
+		stale.older = 'stale-token';
+		const refuseStale: Route = (url, init) => {
+			if (url.startsWith('https://www.youtube.com/youtubei/v1/browse') && String(init?.body).includes('stale-token')) return { status: 400 };
+			return inner(url, init);
+		};
+		const again = makeDeps({ route: refuseStale, store });
+		const r = await runYoutubeSync(again.deps, 'older');
+		expect(r.stopped).toBeNull();
+		expect(again.sent).toHaveLength(100); // page 1 is known and skipped; page 2 is new
+		expect(again.sent.some((s) => sent.some((o) => o.id === s.id))).toBe(false);
+		expect(store.data['sync:youtube'].youtube.cursors.wl.older).toBe('WL:2');
+		const r2 = await runYoutubeSync(again.deps, 'older');
+		expect(r2.sent).toBe(50);
+		expect(store.data['sync:youtube'].youtube.cursors.wl.exhausted).toBe(true);
+	});
+
 	it('a video in both Watch later and the playlist is one item', async () => {
 		const lists = { WL: { total: 10 }, PLabcdefghijklmnop: { total: 10, offset: 5, title: 'Mix' } };
 		const { deps, sent, store } = makeDeps({ route: ytRoute(lists), store: enabled(cfgWith({ playlistId: 'PLabcdefghijklmnop' })) });
@@ -283,6 +308,17 @@ describe('runYoutubeSync', () => {
 		const st = store.data['sync:youtube'];
 		expect(st.signedOut).toBe(true);
 		expect(st.lastError).toBeNull();
+	});
+
+	it('a 200 with no page data and no LOGGED_IN is a blocked check, not signed out', async () => {
+		const route: Route = (url) => (url.startsWith('https://www.youtube.com/playlist?list=') ? { text: playlistPageHtml([], { loggedIn: null, noData: true }) } : undefined);
+		const { deps, store, sent } = makeDeps({ route, store: enabled() });
+		const r = await runYoutubeSync(deps, 'manual');
+		expect(r.stopped).toBe('error');
+		expect(sent).toHaveLength(0);
+		const st = store.data['sync:youtube'];
+		expect(st.signedOut).toBe(false);
+		expect(st.lastError).toMatch(/blocked this check, try later/);
 	});
 
 	it('a 429 on the list ends the run quietly and sends nothing', async () => {

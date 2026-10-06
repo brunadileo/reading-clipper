@@ -235,8 +235,14 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 				if (!text) {
 					// A blocked answer says nothing about this video, so it costs no attempt.
 					if (!result.transcriptsBlocked) state.attempts[item.id] = (state.attempts[item.id] ?? 0) + 1;
-					if ((state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) result.transcriptsStuck++;
-					else result.retryLater++;
+					if ((state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) {
+						// Given up on: the item becomes failed ("No transcript") and leaves the waiting list.
+						const r = await deps.api.markUnreadable(item.id);
+						guard(r);
+						if (r.ok) { delete state.attempts[item.id]; result.unreadable++; } else result.retryLater++;
+					} else {
+						result.retryLater++;
+					}
 					await saveFinishState(deps.store, state);
 					continue;
 				}

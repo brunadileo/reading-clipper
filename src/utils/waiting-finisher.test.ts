@@ -349,16 +349,23 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 1 });
 	});
 
-	it('the 3rd failed attempt stops the retrying: no more reads, and never marked unreadable', async () => {
+	it('the 3rd failed attempt marks the video unreadable so it leaves the waiting list', async () => {
 		const { deps, provided, store, transcriptCalls } = setup({ items: [video(1)], state: { attempts: { v1: 2 } } });
 		const third = await runFinisher(deps, 'now');
 		expect(transcriptCalls).toHaveLength(1);
-		expect(third.transcriptsStuck).toBe(1);
+		expect(third.unreadable).toBe(1);
+		expect(provided).toEqual([{ id: 'v1', outcome: 'unreadable' }]);
+		expect(store.data[FINISH_KEY].attempts).toEqual({});
+	});
+
+	it('a refused unreadable mark keeps the video stuck and retried later', async () => {
+		const { deps, transcriptCalls, store } = setup({ items: [video(1)], state: { attempts: { v1: 2 } }, provide: () => ({ ok: false, status: 409 }) });
+		const third = await runFinisher(deps, 'now');
+		expect(third.retryLater).toBe(1);
 		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 3 });
 		const fourth = await runFinisher(deps, 'now');
-		expect(transcriptCalls).toHaveLength(1);
+		expect(transcriptCalls).toHaveLength(1); // stuck: no more reads
 		expect(fourth.transcriptsStuck).toBe(1);
-		expect(provided).toEqual([]); // the server only accepts unreadable for needs_text
 	});
 
 	it('a stuck video does not take a slot from the items behind it', async () => {
@@ -400,5 +407,15 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(youtubeVideoId('https://evil.example/watch?v=abcdefghijk')).toBeNull();
 		expect(youtubeVideoId('https://www.youtube.com/watch')).toBeNull();
 		expect(youtubeVideoId('nope')).toBeNull();
+	});
+});
+
+describe('listWaiting request (READ-38)', () => {
+	it('asks for needs_text and needs_transcript items', async () => {
+		const { createWaitingApi } = await import('./waiting-api');
+		let body: any;
+		const fetchFn = (async (_u: any, init: any) => { body = JSON.parse(init.body); return { ok: true, status: 200, json: async () => ({ items: [] }) }; }) as unknown as typeof fetch;
+		await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).list();
+		expect(body).toEqual({ codes: ['needs_text', 'needs_transcript'] });
 	});
 });

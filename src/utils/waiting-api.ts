@@ -1,6 +1,6 @@
 // READ-181: the two LazyReader calls the finisher makes. Kept in one small
 // file so the shapes are easy to adjust (the server side is built in parallel).
-//   POST {base}/listWaiting  x-reader-token -> { items: [{ id, url, title, created_at, code }] }
+//   POST {base}/listWaiting  x-reader-token, { codes: ['needs_text', 'needs_transcript'] } -> { items: [{ id, url, title, created_at, code }] }
 //        code is 'needs_text' (an article) or 'needs_transcript' (a YouTube video, READ-38);
 //        a server that predates it sends no code, read as 'needs_text'.
 //   POST {base}/provideText  x-reader-token, { item_id, text } | { item_id, outcome: 'unreadable' }
@@ -93,7 +93,7 @@ export function createWaitingApi(captureUrl: string, token: string, fetchFn: typ
 	return {
 		async list() {
 			if (missing) return { ...bad, items: [] };
-			const r = await post(fetchFn, listUrl!, token, {});
+			const r = await post(fetchFn, listUrl!, token, { codes: ['needs_text', 'needs_transcript'] });
 			return { ok: r.ok, status: r.status, items: r.ok ? parseWaitingItems(r.json) : [], error: r.error };
 		},
 		async provideText(itemId, text) {

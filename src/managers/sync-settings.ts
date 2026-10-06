@@ -6,7 +6,7 @@ import browser from '../utils/browser-polyfill';
 import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
-import { costWarning, FIRST_RUN_VIDEOS, hasSource } from '../utils/youtube-sync';
+import { costWarning, extractPlaylistId, FIRST_RUN_VIDEOS, hasSource } from '../utils/youtube-sync';
 import { IS_STORE_BUILD } from '../utils/store-build';
 import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
 
@@ -46,11 +46,13 @@ export function describeSyncStatus(service: SyncService, s: SyncState, now: numb
 
 // Read inside the click that turns YouTube on, where nothing can be awaited first.
 let youtubeNeverRan = true;
+let youtubeSavedPlaylist: string | null = null;
 
 const YT_PLAYLIST_LINK = 'https://www.youtube.com/playlist?list=';
 
 function refreshYoutubeExtras(state: SyncState): void {
 	youtubeNeverRan = state.lastSuccess === null;
+	youtubeSavedPlaylist = state.youtube?.playlistId ?? null;
 	const extras = document.getElementById('sync-youtube-extras');
 	if (extras) extras.hidden = !state.enabled;
 	const cfg = state.youtube;
@@ -181,6 +183,9 @@ function setupYoutubeExtras(status: HTMLElement | null): void {
 	}
 	check?.addEventListener('click', async () => {
 		if (!input) return;
+		// A new playlist is read on the next run, so the cost warning belongs here too.
+		const newId = input.value.trim() ? extractPlaylistId(input.value) : null;
+		if (newId && newId !== youtubeSavedPlaylist && !window.confirm(`${costWarning(FIRST_RUN_VIDEOS)}\n\nCheck and save this playlist?`)) return;
 		check.disabled = true;
 		try {
 			// An empty field clears the playlist.

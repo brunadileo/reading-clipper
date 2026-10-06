@@ -85,7 +85,8 @@ export function initialData(items: any[], title = 'Watch later') {
 }
 
 export interface PageOpts {
-	loggedIn?: boolean;
+	// null leaves the LOGGED_IN field out of ytcfg.
+	loggedIn?: boolean | null;
 	title?: string;
 	continuation?: string | null;
 	noData?: boolean;
@@ -94,7 +95,7 @@ export interface PageOpts {
 /** The HTML of /playlist?list=...: ytcfg plus the ytInitialData script. */
 export function playlistPageHtml(rows: any[], o: PageOpts = {}): string {
 	const items = o.continuation ? [...rows, continuationItem(o.continuation)] : rows;
-	const cfg = `ytcfg.set({"LOGGED_IN":${o.loggedIn === false ? 'false' : 'true'},"INNERTUBE_API_KEY":"AIzaSyntheticKey0000","INNERTUBE_CONTEXT_CLIENT_VERSION":"2.20261002.10.00","VISITOR_DATA":"vd"});`;
+	const cfg = `ytcfg.set({${o.loggedIn === null ? '' : `"LOGGED_IN":${o.loggedIn === false ? 'false' : 'true'},`}"INNERTUBE_API_KEY":"AIzaSyntheticKey0000","INNERTUBE_CONTEXT_CLIENT_VERSION":"2.20261002.10.00","VISITOR_DATA":"vd"});`;
 	const data = o.noData ? '' : `<script nonce="n">var ytInitialData = ${JSON.stringify(initialData(items, o.title))};</script>`;
 	return `<!DOCTYPE html><html><head><script nonce="n">${cfg}</script></head><body>${data}</body></html>`;
 }

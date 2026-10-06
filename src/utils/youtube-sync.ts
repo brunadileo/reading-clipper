@@ -218,19 +218,21 @@ export interface PlaylistPage extends YtPage {
 	title: string;
 	cfg: YtCfg;
 	signedOut: boolean;
+	// A page with no data that does not say LOGGED_IN false: YouTube blocked the check, which says nothing about sign-in.
+	blocked: boolean;
 }
 
-/** Pure: the HTML of /playlist?list=... Signed out is LOGGED_IN false or no ytInitialData. */
+/** Pure: the HTML of /playlist?list=... Signed out is LOGGED_IN false; no ytInitialData without LOGGED_IN false is blocked. */
 export function parsePlaylistPage(html: string): PlaylistPage {
 	const cfg = parseYtcfg(html);
 	const data = extractInitialData(html);
-	if (!data) return { rows: [], continuation: null, title: '', cfg, signedOut: true };
+	if (!data) return { rows: [], continuation: null, title: '', cfg, signedOut: cfg.loggedIn === false, blocked: cfg.loggedIn !== false };
 	let title = '';
 	for (const n of walk(data)) {
 		const t = n.playlistMetadataRenderer?.title ?? n.playlistHeaderRenderer?.title;
 		if (t) { title = textOf(t); break; }
 	}
-	return { ...parseRows(data), title, cfg, signedOut: cfg.loggedIn === false };
+	return { ...parseRows(data), title, cfg, signedOut: cfg.loggedIn === false, blocked: false };
 }
 
 // --- config and state -------------------------------------------------------
@@ -289,7 +291,7 @@ export const hasSource = (s: SyncState): boolean => !!s.youtube && (!!s.youtube.
 
 /** The warning shown before the first run. */
 export function costWarning(count: number): string {
-	return `Up to ${count} videos will each get a summary from your OpenRouter key. Transcripts are long, so each one costs more than an article.`;
+	return `The first run saves up to ${count} videos, then up to ${ALARM_RUN_VIDEOS} per scheduled run until the rest of the list is in. Each one gets a summary from your OpenRouter key, and transcripts are long, so each costs more than an article.`;
 }
 
 // --- network ----------------------------------------------------------------
@@ -308,6 +310,7 @@ async function fetchFirstPage(deps: SyncDeps, listId: string): Promise<PlaylistP
 	if (!res.ok) throw new StopRun('error', `YouTube answered ${res.status}`);
 	const page = parsePlaylistPage(await res.text());
 	if (page.signedOut) throw new StopRun('signed-out', SIGNED_OUT);
+	if (page.blocked) throw new StopRun('error', 'YouTube blocked this check, try later.');
 	return page;
 }
 
@@ -449,10 +452,23 @@ export async function runYoutubeSync(deps: YoutubeDeps, kind: YoutubeRunKind): P
 			token = page.continuation;
 			if (mode === 'first') { cursor.started = true; cursor.older = token; cursor.exhausted = !token; }
 		}
-		const maxPages = mode === 'older' ? MAX_PAGES_NEW : mode === 'new' ? MAX_PAGES_NEW : Infinity;
+		let maxPages = mode === 'older' ? MAX_PAGES_NEW : mode === 'new' ? MAX_PAGES_NEW : Infinity;
+		let restarted = false;
 		while (token && pages < maxPages && (mode === 'new' || (mode === 'first' ? seen < FIRST_RUN_VIDEOS : added < FIRST_RUN_VIDEOS))) {
 			await deps.sleep(jitter(deps, 2000, 4000));
 			const next = await fetchContinuation(deps, page.cfg, token);
+			if (!next && mode === 'older' && pages === 0 && !restarted) {
+				// The stored token went stale: walk again from page 1. Known ids are skipped by take(),
+				// and the page cap is lifted so the walk can get past them to the first unread video.
+				restarted = true;
+				maxPages = Infinity;
+				token = page.continuation;
+				cursor.older = token;
+				cursor.exhausted = !token;
+				seen += page.rows.length;
+				added += take(page.rows);
+				continue;
+			}
 			if (!next) {
 				notes.push(mode === 'older'
 					? 'YouTube refused the next page, so Load older stopped there'
