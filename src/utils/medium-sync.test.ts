@@ -14,10 +14,10 @@ import {
 
 const fx = (name: string) => readFileSync(resolve(__dirname, 'fixtures/medium', name), 'utf8');
 
-const items = (listNo: number, n: number, from = 0): ItemSpec[] =>
+const items = (listNo: number, n: number, from = 0, locked = false): ItemSpec[] =>
 	Array.from({ length: n }, (_, k) => {
 		const i = from + k;
-		return { postId: postIdOf(listNo, i), catalogItemId: catalogItemIdOf(listNo, i), title: `Synthetic story ${listNo}-${i}` };
+		return { postId: postIdOf(listNo, i), catalogItemId: catalogItemIdOf(listNo, i), title: `Synthetic story ${listNo}-${i}`, locked };
 	});
 
 describe('extractApolloState', () => {
@@ -85,6 +85,7 @@ interface World {
 	// listNo, catalog id, own?, total count, how many the first page holds
 	lists: Array<{ no: number; id: string; predefined?: boolean; count: number; page?: number; own?: boolean }>;
 	tier?: string | null;
+	locked?: boolean;
 	listStatus?: number;
 	libraryStatus?: number;
 	signedOut?: boolean;
@@ -100,7 +101,7 @@ function route(w: World): Route {
 		for (const l of w.lists) {
 			if (url.endsWith(l.predefined ? '/list/reading-list' : `/list/${l.id}`)) {
 				if (w.listStatus) return { status: w.listStatus };
-				return { text: listHtml(specs.find((s) => s.catalogId === l.id)!, items(l.no, Math.min(l.page ?? 20, l.count)), l.count) };
+				return { text: listHtml(specs.find((s) => s.catalogId === l.id)!, items(l.no, Math.min(l.page ?? 20, l.count), 0, w.locked), l.count) };
 			}
 		}
 	};
@@ -173,11 +174,28 @@ describe('runMediumSync', () => {
 	it('a later run stops scanning a list after 3 known in a row', async () => {
 		const known = [0, 1, 2].map((i) => `md:${postIdOf(1, i)}`);
 		const w: World = { lists: [{ no: 1, id: READING, predefined: true, count: 20 }, { no: 2, id: OWN, count: 5 }] };
-		const { deps, sent } = setup(w, { store: enabled({ knownIds: known, lastSuccess: 5, lists: {} }) });
+		const { deps, sent, store } = setup(w, { store: enabled({ knownIds: known, lastSuccess: 5, lists: {} }) });
 		const r = await runMediumSync(deps, 'manual');
 		// nothing from list 1 (its 3 newest were known, the scan stopped), all 5 of list 2
 		expect(r.sent).toBe(5);
 		expect(sent.map((x) => x.id)).toEqual([0, 1, 2, 3, 4].map((i) => `md:${postIdOf(2, i)}`));
+		// list 1 was not scanned to its end, so it is not exhausted and Load older stays open
+		const st = store.data['sync:medium'];
+		expect(st.lists[READING].exhausted).toBe(false);
+		expect(st.lists[OWN].exhausted).toBe(true);
+		expect(st.olderExhausted).toBe(false);
+	});
+
+	it('Load older then sends what the stopped scan left, and only then is everything exhausted', async () => {
+		const known = [0, 1, 2].map((i) => `md:${postIdOf(1, i)}`);
+		const w: World = { lists: [{ no: 1, id: READING, predefined: true, count: 20 }] };
+		const a = setup(w, { store: enabled({ knownIds: known, lastSuccess: 5, lists: { [READING]: { seen: 20, exhausted: true } } }) });
+		await runMediumSync(a.deps, 'manual');
+		expect(a.store.data['sync:medium'].lists[READING].exhausted).toBe(false);
+		const b = setup(w, { store: a.store });
+		const r = await runMediumSync(b.deps, 'older');
+		expect(r.sent).toBe(17);
+		expect(b.store.data['sync:medium'].olderExhausted).toBe(true);
 	});
 
 	it('dedupes by post id: the same post in two lists is sent once, and a second run sends nothing', async () => {
@@ -244,6 +262,43 @@ describe('runMediumSync', () => {
 			expect(blocked.store.data['sync:medium'].lists[READING]).toEqual({ seen: 20, exhausted: false });
 		});
 
+		it('a stalled scroll below the list count is not the end and says so', async () => {
+			const first = setup(w);
+			await runMediumSync(first.deps, 'manual');
+			const stall = setup(w, { store: first.store, collect: async () => ({ ...collected(), total: 30, ended: true }) });
+			const r = await runMediumSync(stall.deps, 'older');
+			expect(r.stopped).toBeNull();
+			expect(r.message).toMatch(/stopped loading/);
+			const st = stall.store.data['sync:medium'];
+			expect(st.lists[READING]).toEqual({ seen: 30, exhausted: false });
+			expect(st.olderExhausted).toBe(false);
+		});
+
+		it('a list page that cannot be read is skipped; the first-page batch is still sent and the cursor stays', async () => {
+			const two: World = { lists: [{ no: 1, id: READING, predefined: true, count: 45 }, { no: 2, id: OWN, count: 3 }] };
+			const run = setup(two, { collect: async () => { throw new Error('Reading the list page timed out'); } });
+			const r = await runMediumSync(run.deps, 'older');
+			expect(r.stopped).toBeNull();
+			expect(r.sent).toBe(23);
+			expect(r.message).toMatch(/Could not read a list page/);
+			const st = run.store.data['sync:medium'];
+			expect(st.pending).toEqual([]);
+			expect(st.lists[READING]).toEqual({ seen: 20, exhausted: false });
+		});
+
+		it('a post link off Medium is never fetched, only sent as a link', async () => {
+			const first = setup(w);
+			await runMediumSync(first.deps, 'manual');
+			const off = setup(w, {
+				store: first.store,
+				collect: async () => ({ posts: [{ postId: postIdOf(1, 30), title: 'Elsewhere', url: `https://evil.example/x-${postIdOf(1, 30)}` }], total: 45, ended: true }),
+			});
+			await runMediumSync(off.deps, 'older');
+			expect(off.fetched).toEqual([]);
+			expect(off.sent).toHaveLength(1);
+			expect(off.sent[0].text).toBeUndefined();
+		});
+
 		it('never opens the page for a list the first page already covers', async () => {
 			const small = setup({ lists: [{ no: 2, id: OWN, count: 3 }] });
 			await runMediumSync(small.deps, 'manual');
@@ -269,8 +324,17 @@ describe('runMediumSync', () => {
 			expect(r.linkOnly).toBe(1);
 			expect(store.data['sync:medium'].knownIds).toEqual([`md:${postIdOf(1, 0)}`]);
 		});
+		it('a member-only story without membership is sent as a link alone even if the page looks long', async () => {
+			const { deps, sent, fetched } = setup({ ...one, tier: 'REGULAR', locked: true }, { articles: () => postHtml(words(300)) });
+			await runMediumSync(deps, 'manual');
+			expect(fetched).toEqual([]);
+			expect(sent[0].text).toBeUndefined();
+			const member = setup({ ...one, tier: 'MEMBER', locked: true }, { articles: () => postHtml(words(300)) });
+			await runMediumSync(member.deps, 'manual');
+			expect(member.sent[0].text).toBeTruthy();
+		});
 		it('a short page, a failed fetch and an extractor error all send the link alone', async () => {
-			for (const articles of [() => postHtml(words(40)), () => ({ status: 403 })]) {
+			for (const articles of [() => postHtml(words(40)), () => ({ status: 404 })]) {
 				const { deps, sent } = setup(one, { articles });
 				await runMediumSync(deps, 'manual');
 				expect(sent[0].text).toBeUndefined();
@@ -311,6 +375,18 @@ describe('runMediumSync', () => {
 			expect(r2.stopped).toBe('rate-limited');
 			expect(art.sent).toEqual([]);
 			expect(art.store.data['sync:medium'].pending.length).toBeGreaterThan(0);
+		});
+
+		it('403 or a Cloudflare page on an article stops the run as signed out and keeps the queue', async () => {
+			for (const articles of [() => ({ status: 403 }), () => `<html><head><title>Just a moment...</title></head></html>`]) {
+				const { deps, sent, store } = setup({ lists: many(2) }, { articles });
+				const r = await runMediumSync(deps, 'manual');
+				expect(r.stopped).toBe('signed-out');
+				expect(sent).toEqual([]);
+				const st = store.data['sync:medium'];
+				expect(st.signedOut).toBe(true);
+				expect(st.pending.length).toBeGreaterThan(0);
+			}
 		});
 
 		it('five failures in a row end the run; the pending queue and counts survive', async () => {

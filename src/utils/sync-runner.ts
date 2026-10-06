@@ -222,6 +222,10 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'you
 		// Load older, and the Medium row's own Sync: Medium alone, under the shared lock.
 		job.enabled = () => isOn('medium');
 		job.run = async () => mediumLine(await runMedium(trigger === 'older' ? 'older' : 'manual'));
+		// Then finish, in the same locked sequence, so the links just sent without
+		// text are filled right away (the global Sync now already does this).
+		const finish = buildJobs(true).find((j) => j.id === 'finish')!;
+		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false });
 	} else if (id === 'instagram') {
 		job.run = async () => {
 			const r = await runInstagramSync(makeDeps('instagram'), 'older');

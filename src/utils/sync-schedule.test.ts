@@ -223,11 +223,11 @@ describe('Medium job (button-only, READ-36)', () => {
 		expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:medium', 'fail:medium', 'start:finish', 'end:finish']);
 		expect(res.ran.map((r) => r.ok)).toEqual([true, true, false, true]);
 	});
-	it('Load older and the row Sync run Medium alone and leave the schedule clock alone', async () => {
+	it('Load older and the row Sync run Medium then finish, and leave the schedule clock alone', async () => {
 		const h = harness();
 		const log: string[] = [];
-		await runSequence([job('medium', log)], h.deps, 'older', { recordRun: false });
-		expect(log).toEqual(['start:medium', 'end:medium']);
+		await runSequence([job('medium', log), job('finish', log)], h.deps, 'older', { recordRun: false });
+		expect(log).toEqual(['start:medium', 'end:medium', 'start:finish', 'end:finish']);
 		expect((await loadSchedule(h.store)).lastRunAt).toBeNull();
 	});
 });

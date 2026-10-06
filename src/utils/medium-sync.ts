@@ -20,7 +20,7 @@ import {
 	type SyncDeps, type SyncPost, type SyncState,
 } from './sync-core';
 import { MIN_WORDS } from './substack-sync';
-import type { FullTextCheck } from './full-text-check';
+import { isSafeFetchUrl, type FullTextCheck } from './full-text-check';
 
 export const MEDIUM_ORIGIN = 'https://medium.com';
 export const MEDIUM_LIBRARY_URL = `${MEDIUM_ORIGIN}/me/lists`;
@@ -84,7 +84,7 @@ export interface MediumDeps extends SyncDeps {
 	fetchPage: (url: string) => Promise<{ status: number; html: string; finalUrl: string }>;
 	extractHtml: (html: string, url: string) => Promise<string>;
 	checkFullText: (text: string) => FullTextCheck;
-	openListAndCollect: (url: string, wantNew: number, knownPostIds: string[]) => Promise<MediumCollected>;
+	openListAndCollect: (url: string, wantNew: number, knownPostIds: string[], listCount: number) => Promise<MediumCollected>;
 }
 
 // --- pure parsers ----------------------------------------------------------
@@ -209,6 +209,14 @@ const toPost = (postId: string, url: string, title: string): SyncPost => ({
 
 // --- run -------------------------------------------------------------------
 
+class SkipText extends Error {}
+
+const isMediumPostUrl = (raw: string): boolean => {
+	if (!isSafeFetchUrl(raw)) return false;
+	const h = new URL(raw).hostname.toLowerCase();
+	return h === 'medium.com' || h.endsWith('.medium.com');
+};
+
 class StopRun extends Error {
 	constructor(public reason: NonNullable<MediumRunResult['stopped']>, message: string) {
 		super(message);
@@ -267,6 +275,9 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 		// 2. First page (20 newest) of each own list by plain GET.
 		const cands = new Map<string, Cand>();
 		const firstPageCount: Record<string, number> = {};
+		// Whether the scan of a list's first page reached its end (a break at 3 known leaves items unseen).
+		const scanComplete: Record<string, boolean> = {};
+		const lockedIds = new Set<string>();
 		let listIndex = 0;
 		for (const list of lib.lists) {
 			if (list.postItemsCount <= 0) { cursors[list.catalogId] = { seen: 0, exhausted: true }; continue; }
@@ -277,12 +288,14 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 			const page = parseListPage(apollo);
 			firstPageCount[list.catalogId] = page.items.length;
 			let knownRun = 0;
+			scanComplete[list.catalogId] = true;
 			for (const it of page.items) {
 				const id = `md:${it.postId}`;
+				if (it.locked) lockedIds.add(id);
 				if (known.has(id) || failedOut(id)) {
 					knownRun++;
 					// Later syncs stop scanning a list after 3 known in a row (newest first).
-					if (!isOlder && !firstRun && knownRun >= MEDIUM_STOP_AFTER_KNOWN) break;
+					if (!isOlder && !firstRun && knownRun >= MEDIUM_STOP_AFTER_KNOWN) { scanComplete[list.catalogId] = false; break; }
 					continue;
 				}
 				knownRun = 0;
@@ -310,7 +323,14 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 				const first = firstPageCount[list.catalogId];
 				if (first === undefined || cur.exhausted || list.postItemsCount <= Math.max(cur.seen, first)) continue;
 				await deps.sleep(jitter(deps, 2000, 4000));
-				const got = await deps.openListAndCollect(listUrl(lib.username, list), remaining, [...known, ...inBatch].map((id) => id.replace(/^md:/, '')));
+				let got: MediumCollected;
+				try {
+					got = await deps.openListAndCollect(listUrl(lib.username, list), remaining, [...known, ...inBatch].map((id) => id.replace(/^md:/, '')), list.postItemsCount);
+				} catch (e) {
+					// One list that cannot be read must not lose the batch: skip it, keep the cursor.
+					result.message = `Could not read a list page: ${e instanceof Error ? e.message : String(e)}. Press Load older to try again.`;
+					continue;
+				}
 				if (got.blocked) throw new StopRun('signed-out', MEDIUM_SIGNED_OUT);
 				let added = 0;
 				for (const p of got.posts) {
@@ -321,7 +341,10 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 					added++;
 				}
 				remaining -= added;
-				deepUpdates[list.catalogId] = { seen: Math.max(cur.seen, got.total), exhausted: got.ended };
+				// A stalled scroll (a minimized window throttles the page) is not the end of the list.
+				const finished = got.ended && got.total >= list.postItemsCount;
+				if (got.ended && !finished) result.message = 'Medium stopped loading a list before the end. Press Load older again to continue.';
+				deepUpdates[list.catalogId] = { seen: Math.max(cur.seen, got.total), exhausted: finished };
 			}
 		}
 
@@ -335,15 +358,18 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 			firstSend = false;
 			let text: string | undefined;
 			try {
+				// Only Medium's own pages are read; a member-only story is not read without membership.
+				if (!isMediumPostUrl(post.url) || (lockedIds.has(post.id) && lib.tier !== 'MEMBER')) throw new SkipText();
 				const page = await deps.fetchPage(post.url);
 				if (page.status === 429) throw new StopRun('rate-limited', MEDIUM_RATE_LIMITED);
+				if (page.status === 401 || page.status === 403 || /<title>\s*just a moment/i.test(page.html)) throw new StopRun('signed-out', MEDIUM_SIGNED_OUT);
 				if (page.status >= 200 && page.status < 300 && page.html) {
 					const body = await deps.extractHtml(page.html, page.finalUrl || post.url);
 					if (countWords(body) >= MIN_WORDS && deps.checkFullText(body).ok) text = body;
 				}
 			} catch (e) {
 				if (e instanceof StopRun) throw e;
-				text = undefined;
+				text = undefined; // SkipText or any read error: the link alone
 			}
 			const sent = await deps.send(post, text);
 			if (sent.status === 401) throw new StopRun('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
@@ -370,11 +396,13 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 			const prev = cursors[list.catalogId] ?? { seen: 0, exhausted: false };
 			const first = firstPageCount[list.catalogId];
 			if (first === undefined) { cursors[list.catalogId] = prev; continue; }
-			const covered = list.postItemsCount <= first && !leftoverLists.has(list.catalogId);
+			const firstPageOnly = list.postItemsCount <= first;
+			const covered = firstPageOnly && scanComplete[list.catalogId] !== false && !leftoverLists.has(list.catalogId);
 			const deep = deepUpdates[list.catalogId];
+			// A list the first page covers is judged fresh every run; a deeper list keeps what Load older proved.
 			cursors[list.catalogId] = deep
 				? { seen: Math.max(deep.seen, first), exhausted: deep.exhausted || prev.exhausted }
-				: { seen: Math.max(prev.seen, first), exhausted: prev.exhausted || covered };
+				: { seen: Math.max(prev.seen, first), exhausted: firstPageOnly ? covered : prev.exhausted };
 		}
 		state.lists = cursors;
 		state.olderExhausted = lib.lists.length > 0 && lib.lists.every((l) => cursors[l.catalogId]?.exhausted);
