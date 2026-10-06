@@ -59,9 +59,9 @@
 							<div class="lrs-field">
 								<label for="sync-frequency">How often</label>
 								<select class="lrs-select" id="sync-frequency">
-									<option value="hourly">Every hour</option>
+									<option value="hourly" selected>Every hour</option>
 									<option value="every3h">Every 3 hours</option>
-									<option value="twiceDaily" selected>Twice a day</option>
+									<option value="twiceDaily">Twice a day</option>
 									<option value="daily">Once a day</option>
 									<option value="manual">Only when I press Sync now</option>
 								</select>
@@ -102,6 +102,7 @@
 									<div class="t">Finish waiting articles</div>
 									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what the steps above just saved. Chrome asks once for access to the sites you save from.</div>
 									<div class="d" id="finish-status" role="status">Off</div>
+									<div class="d" id="finish-instant" role="status"></div>
 									<button class="lrs-btn" id="finish-allow" type="button" hidden>Allow access</button>
 									<a class="lrs-btn link" id="finish-open-list" hidden href="https://lazyreader.app/waiting" target="_blank" rel="noopener">Open the list ›</a>
 								</div>

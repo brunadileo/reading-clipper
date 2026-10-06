@@ -144,6 +144,16 @@ function buildJobs(manual: boolean): SyncJob[] {
 	return jobs.sort((a, b) => JOB_ORDER.indexOf(a.id as (typeof JOB_ORDER)[number]) - JOB_ORDER.indexOf(b.id as (typeof JOB_ORDER)[number]));
 }
 
+/** The finish job alone, rerun once at the end of a sequence a push wake found busy. */
+function wakeJob(): SyncJob {
+	return {
+		id: 'finish',
+		name: 'Finish waiting articles',
+		enabled: async () => true,
+		run: async () => finishLine(await runFinish('wake-rerun')),
+	};
+}
+
 /**
  * One alarm, set to the next due time. Manual frequency means no alarm at all.
  * fullInterval pushes it a whole interval out (used when nothing was switched
@@ -164,18 +174,21 @@ export async function scheduleAlarm(force: boolean, fullInterval = false): Promi
 
 /** The whole sequence (scheduled, catch-up or Sync now), then the next alarm. */
 export async function runAll(trigger: SequenceTrigger) {
-	const result = await runSequence(buildJobs(trigger === 'now'), sequenceDeps, trigger);
+	const result = await runSequence(buildJobs(trigger === 'now'), sequenceDeps, trigger, { wakeJob: wakeJob() });
 	if (result.skipped !== 'busy') await scheduleAlarm(true, result.skipped === 'nothing-to-run');
 	return result;
 }
 
 /** Load older (one service) or the web's Finish now (the finish job only), under the same lock. */
-export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trigger: 'older' | 'finish-now') {
+export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trigger: 'older' | 'finish-now' | 'finish-push') {
 	const job = buildJobs(false).find((j) => j.id === id)!;
 	if (trigger === 'finish-now') {
 		// Works even with the finisher's own switch off, as Finish now always did.
 		job.enabled = async () => finishSupported();
 		job.run = async () => finishLine(await runFinish('now'));
+	} else if (trigger === 'finish-push') {
+		// A wake from the server: finish only, no gap; keeps the finisher's switch.
+		job.run = async () => finishLine(await runFinish('push'));
 	} else if (id === 'substack') {
 		job.run = async () => {
 			const r = await runSubstackSync(makeDeps('substack'), 'older');
@@ -195,7 +208,7 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trig
 			return st.lastResult ?? `${r.sent} saved`;
 		};
 	}
-	return runSequence([job], sequenceDeps, trigger, { recordRun: false });
+	return runSequence([job], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
 }
 
 export function initSyncRunner(): void {
@@ -216,7 +229,8 @@ export function initSyncRunner(): void {
 		void scheduleAlarm(false).then(() => runAll('startup'));
 	});
 	browser.runtime.onInstalled.addListener(() => {
-		void scheduleAlarm(false);
+		// force: loadSchedule may just have moved Twice a day to Every hour (READ-247), so the old 12 h alarm must go.
+		void scheduleAlarm(true);
 	});
 
 	browser.runtime.onMessage.addListener((request: unknown, sender: unknown, sendResponse: (r?: any) => void): true | undefined => {

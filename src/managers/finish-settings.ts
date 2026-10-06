@@ -3,6 +3,7 @@
 import browser from '../utils/browser-polyfill';
 import { describeFinishStatus, FINISH_ORIGINS, finishNeedsAccess, isEnabled, loadFinishState } from '../utils/waiting-finisher';
 import { setText } from '../utils/set-text';
+import { describePushStatus, loadPushState } from '../utils/clipper-push';
 import { loadReadingSettings } from '../utils/storage-utils';
 
 const store = {
@@ -34,6 +35,7 @@ async function refresh(): Promise<void> {
 		toggle.closest('.checkbox-container')?.classList.toggle('is-enabled', on);
 	}
 	setText(status, describeFinishStatus(state, hasToken, Date.now(), access));
+	setText(document.getElementById('finish-instant'), describePushStatus(await loadPushState(store)));
 	const list = document.getElementById('finish-open-list');
 	if (list) list.hidden = !on;
 }

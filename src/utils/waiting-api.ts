@@ -38,7 +38,7 @@ export interface WaitingApi {
 }
 
 /** Endpoint URL for a function name, derived from the capture URL, or null. */
-export function endpointUrl(captureUrl: string, name: 'listWaiting' | 'provideText'): string | null {
+export function endpointUrl(captureUrl: string, name: 'listWaiting' | 'provideText' | 'registerClipper'): string | null {
 	try {
 		const u = new URL(captureUrl);
 		if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;

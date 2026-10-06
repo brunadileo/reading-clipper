@@ -1,9 +1,10 @@
 {
 	"manifest_version": 3,
+	"minimum_chrome_version": "121",
 	"default_locale": "en",
 	"name": "Lazy Reader Clipper",
 	"homepage_url": "https://lazyreader.app",
-	"version": "1.8.0",
+	"version": "1.10.0",
 	"description": "Save the page you're on to Lazy Reader with one click, full article text included.",
 	"permissions": [
 		"activeTab",
@@ -13,7 +14,8 @@
 		"scripting",
 		"alarms",
 		"idle",
-		"offscreen"
+		"offscreen",
+		"notifications"
 	],
 	"host_permissions": [
 		"https://lazyreader.app/*"

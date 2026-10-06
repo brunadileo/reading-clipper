@@ -15,6 +15,8 @@ export const STALE_LOCK_MS = 15 * 60 * 1000;
 export const AUTO_LIMIT = 10;
 export const NOW_LIMIT = 20;
 export const MAX_ITEM_ATTEMPTS = 3;
+// Automatic runs try an item at most once an hour; Sync now and web Finish now try everything.
+export const ITEM_RETRY_MS = 60 * 60 * 1000;
 export const MAX_HTML_BYTES = 5_000_000;
 
 // READ-48: the store build asks for these sites at run time (optional host
@@ -22,7 +24,9 @@ export const MAX_HTML_BYTES = 5_000_000;
 // finisher skips quietly.
 export const FINISH_ORIGINS = ['https://*/*', 'http://*/*'];
 
-export type FinishTrigger = 'startup' | 'idle' | 'alarm' | 'now';
+// 'push' = a wake from the server; 'wake-rerun' = the one rerun at the end of a
+// sequence that a wake found busy (no gap, the hourly per-item rule still applies).
+export type FinishTrigger = 'startup' | 'idle' | 'alarm' | 'now' | 'push' | 'wake-rerun';
 
 export interface FinishState {
 	// null = default: on once a token is set.
@@ -38,6 +42,8 @@ export interface FinishState {
 	// SOFT_MISSES_PER_ATTEMPT of them cost one attempt, so a video that never answers
 	// clearly still leaves the list in the end. Optional: older saved states lack it.
 	softMisses?: Record<string, number>;
+	// itemId -> when an automatic run last tried it, pruned like attempts.
+	triedAt: Record<string, number>;
 	waitingCount: number | null;
 }
 
@@ -52,6 +58,7 @@ export const emptyFinishState = (): FinishState => ({
 	lastError: null,
 	attempts: {},
 	softMisses: {},
+	triedAt: {},
 	waitingCount: null,
 });
 
@@ -119,14 +126,17 @@ export function shouldRun(trigger: FinishTrigger, state: FinishState, hasToken: 
 	if (!hasAccess) return 'no-access';
 	if (trigger !== 'now' && !isEnabled(state, hasToken)) return 'disabled';
 	if (state.running && state.lastAttemptAt !== null && now - state.lastAttemptAt < STALE_LOCK_MS) return 'busy';
-	if (trigger !== 'now' && state.lastAttemptAt !== null && now - state.lastAttemptAt < AUTO_MIN_GAP_MS) return 'throttled';
+	// A push wake or its rerun has no gap: the 20 s collect pause and the hourly per-item rule hold it back.
+	if (trigger !== 'now' && trigger !== 'wake-rerun' && trigger !== 'push') {
+		if (state.lastAttemptAt !== null && now - state.lastAttemptAt < AUTO_MIN_GAP_MS) return 'throttled';
+	}
 	return null;
 }
 
 /** Pure: which attempts survive a fresh listWaiting. */
-export function pruneAttempts(attempts: Record<string, number>, items: WaitingItem[]): Record<string, number> {
+export function pruneAttempts<T>(attempts: Record<string, T>, items: WaitingItem[]): Record<string, T> {
 	const ids = new Set(items.map((i) => i.id));
-	const out: Record<string, number> = {};
+	const out: Record<string, T> = {};
 	for (const [id, n] of Object.entries(attempts)) if (ids.has(id)) out[id] = n;
 	return out;
 }
@@ -196,6 +206,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 		if (!listed.ok) throw new StopRun('error', listed.error || 'Could not read the waiting list');
 		state.attempts = pruneAttempts(state.attempts, listed.items);
 		state.softMisses = pruneAttempts(state.softMisses ?? {}, listed.items);
+		state.triedAt = pruneAttempts(state.triedAt ?? {}, listed.items);
 		state.waitingCount = listed.items.length;
 		await saveFinishState(deps.store, state);
 
@@ -211,7 +222,13 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 			else result.finished++;
 		};
 
-		const todo = listed.items.filter((i) => i.code !== 'needs_transcript' || !!deps.readTranscript).slice(0, limit);
+		// Transcript items only when this browser can read them; automatic runs
+		// (push included) leave an item alone for an hour after the last try.
+		const auto = trigger !== 'now';
+		const todo = listed.items
+			.filter((i) => i.code !== 'needs_transcript' || !!deps.readTranscript)
+			.filter((i) => { const t = state.triedAt[i.id]; return !auto || t === undefined || deps.now() - t >= ITEM_RETRY_MS; })
+			.slice(0, limit);
 
 		let first = true;
 		let transcriptsOff = false;
@@ -226,8 +243,10 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 			if (item.code === 'needs_transcript') {
 				// Given up on earlier but the mark was refused: retry the mark, no new read.
 				let giveUp = (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS;
+				// Not this item's fault: no attempt counted and not marked as tried, so the next run reads it.
+				if (!giveUp && transcriptsOff) continue;
+				state.triedAt[item.id] = deps.now();
 				if (!giveUp) {
-					if (transcriptsOff) continue; // not this item's fault: no attempt counted
 					const videoId = youtubeVideoId(item.url);
 					let text: string | null = null;
 					let definite = true;
@@ -272,6 +291,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 				await saveFinishState(deps.store, state);
 				continue;
 			}
+			state.triedAt[item.id] = deps.now();
 
 			// A link we must not open is given up on without a fetch.
 			if (!isSafeFetchUrl(item.url) || (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) {

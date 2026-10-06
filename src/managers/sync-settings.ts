@@ -240,7 +240,7 @@ async function refreshSchedule(): Promise<void> {
 	}
 	setText(freqHint, state.frequency === 'manual'
 		? 'Runs only when you press Sync now.'
-		: 'Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back.');
+		: 'Runs while Chrome is open. If Chrome was closed when a sync was due, it runs once when you come back. A waiting article is tried at most once an hour.');
 }
 
 function setupSchedule(): void {
