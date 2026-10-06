@@ -25,3 +25,4 @@ assets/shared
 .cursorrules
 .env
 context/
+__pycache__/
