@@ -58,14 +58,15 @@ async function refresh(): Promise<void> {
 	const dotText = document.getElementById('nav-connection-sr');
 	card?.setAttribute('data-state', view.connected ? 'connected' : 'disconnected');
 	if (pip) {
-		pip.classList.toggle('ok', view.connected);
-		pip.classList.toggle('warn', !view.connected);
+		pip.classList.toggle('lr-dot-ok', view.connected);
+		pip.classList.toggle('lr-dot-amber', !view.connected);
 	}
 	setText(document.getElementById('connection-state'), view.title);
 	setText(document.getElementById('connection-hint'), view.hint);
 	if (action) {
 		setText(action, view.action);
-		action.classList.toggle('primary', !view.connected);
+		action.classList.toggle('lr-btn-primary', !view.connected);
+		action.classList.toggle('lr-btn-secondary', view.connected);
 		action.hidden = false;
 	}
 	if (disconnect) disconnect.hidden = !view.connected;

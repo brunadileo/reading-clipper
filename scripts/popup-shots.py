@@ -138,6 +138,8 @@ def states():
         "settings-connection": ("settings.html", "#connection", True, FIXTURE_URL, None, 1100),
         "settings-disconnected": ("settings.html", "#connection", False, FIXTURE_URL, None, 1100),
         "settings-sync": ("settings.html", "#sync", True, FIXTURE_URL, None, 1100),
+        "settings-sync-youtube": ("settings.html", "#sync", True, FIXTURE_URL, None, 1100),
+        "settings-sync-youtube-narrow": ("settings.html", "#sync", True, FIXTURE_URL, None, 600),
         "settings-shortcuts": ("settings.html", "#shortcuts", True, FIXTURE_URL, None, 1100),
         "settings-about": ("settings.html", "#about", True, FIXTURE_URL, None, 1100),
     }
@@ -165,13 +167,21 @@ def run(args):
                 page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
                 page.goto(f"{base}/{page_file}{frag}")
                 page.wait_for_timeout(1200)
+                if page_file == "settings.html" and frag and page.query_selector(f'.lr-nav li[data-section="{frag[1:]}"] button'):
+                    page.click(f'.lr-nav li[data-section="{frag[1:]}"] button')  # the hash alone does not switch sections here
+                    page.wait_for_timeout(300)
                 if capture:
                     if name == "popup-saved" and page.query_selector('[data-value="read-later"]'):
                         page.click('[data-value="read-later"]')  # proves the tab writes #vault-select
                     page.click("#clip-btn")
                     page.wait_for_timeout(1000)
-                if page_file == "settings.html" and name == "settings-about":
-                    pass
+                if name.startswith("settings-sync-youtube"):
+                    # Show the YouTube extras open and the older button, then measure every switch.
+                    page.evaluate("document.getElementById('sync-youtube-extras').hidden = false; document.getElementById('sync-youtube-older').hidden = false;")
+                    page.wait_for_timeout(200)
+                    boxes = page.evaluate("""() => [...document.querySelectorAll('#sync-section .checkbox-container')].filter(e => e.getBoundingClientRect().width).map(e => { const r = e.getBoundingClientRect(); return { id: e.querySelector('input').id, left: Math.round(r.left*10)/10, right: Math.round(r.right*10)/10, topVsTitle: Math.round((r.top - e.closest('.lr-row').querySelector('.lr-row-title').getBoundingClientRect().top)*10)/10 }; })""")
+                    rights = {b['right'] for b in boxes}
+                    print(f"  switches {name} {scheme}: {boxes} same-right-edge={len(rights) == 1}")
                 page.wait_for_timeout(300)
                 shot = out / f"{args.prefix}-{name}-{scheme}.png"
                 page.screenshot(path=str(shot), full_page=True)

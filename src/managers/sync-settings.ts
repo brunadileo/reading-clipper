@@ -231,12 +231,13 @@ async function refreshSchedule(): Promise<void> {
 	setText(status, describeScheduleStatus(state, Date.now()));
 	if (now) now.disabled = running;
 	if (pip) {
-		// Grey before the first sync, blue pulse while running, amber when the last
+		// Grey before the first sync, pulsing amber while running, red when the last
 		// summary reports a failure or stop, green otherwise.
 		const failed = !!state.lastSummary && /failed|error|stopped \((?!too-soon)/i.test(state.lastSummary);
-		pip.classList.toggle('run', running);
-		pip.classList.toggle('warn', !running && state.lastFinishedAt !== null && failed);
-		pip.classList.toggle('ok', !running && state.lastFinishedAt !== null && !failed);
+		pip.classList.toggle('lr-dot-amber', running);
+		pip.classList.toggle('lr-dot-pulse', running);
+		pip.classList.toggle('lr-dot-fail', !running && state.lastFinishedAt !== null && failed);
+		pip.classList.toggle('lr-dot-ok', !running && state.lastFinishedAt !== null && !failed);
 	}
 	setText(freqHint, state.frequency === 'manual'
 		? 'Runs only when you press Sync now.'

@@ -1,8 +1,10 @@
-// READ-197: the LazyReader look for settings.html. Everything is scoped to
-// #settings-page / #lr-settings so the popup, reader and side panel are not
-// touched. Tokens are LazyReader's "Calm" light look (lazyreader/web/src/index.css).
-// This page is light only, also when the system is dark (Bruna's rule). The Obsidian pages
-// stay in the DOM with the hidden attribute.
+// READ-197, READ-236: settings.html on the Lazy Reader design copy. Everything
+// is scoped to #settings-page / #lr-settings so the popup, reader and side
+// panel are not touched. Colours, type and radii come only from the tokens in
+// _lazy-tokens.scss (no colour is defined here); buttons, fields, cards, rows,
+// pills and dots are the .lr-* classes from _lazy-ui.scss, and this file adds
+// the page layout, the nav list and the switch. The page follows the system
+// dark mode like the popup. The Obsidian pages stay in the DOM with the hidden attribute.
 //
 // Fonts ship inside the extension (src/fonts, SIL OFL, licences alongside).
 // The url() below is left alone by css-loader (see webpack.config.js) and
@@ -20,35 +22,15 @@
 @font-face {
 	font-family: 'Hanken Grotesk';
 	font-style: normal;
-	font-weight: 400 600;
+	font-weight: 400 700;
 	font-display: swap;
 	src: url('fonts/hanken-grotesk-latin.woff2') format('woff2');
 	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 #settings-page {
-	--lr-bg: hsl(211 47.1% 99%);
-	--lr-fg: hsl(214 27.6% 11%);
-	--lr-card: hsl(0 0% 100%);
-	--lr-muted: hsl(211 25.8% 95.6%);
-	--lr-mfg: hsl(214 7.8% 35.1%);
-	--lr-border: hsl(211 11.7% 88.5%);
-	--lr-input: hsl(211 4.3% 52.9%);
-	--lr-accent: hsl(210 73.1% 30.5%);
-	--lr-on-accent: hsl(0 0% 100%);
-	--lr-accent-l: hsl(212 79% 94.3%);
-	--lr-accent-fg: hsl(210 73.1% 30.5%);
-	--lr-green: hsl(153 52.5% 27.3%);
-	--lr-amber: hsl(32 100% 28.1%);
-	--lr-red: hsl(1 63.3% 42.1%);
-	--lr-r: 0.5rem;
-	--lr-display: 'Literata', ui-serif, Georgia, serif;
-	--lr-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-	background-color: var(--lr-bg);
-	// Native controls and scrollbars stay light even when macOS is dark. The
-	// Obsidian dark variables only reach hidden elements; every visible colour
-	// here comes from the --lr tokens.
-	color-scheme: light only;
+	background-color: hsl(var(--background));
+	color: hsl(var(--foreground));
 }
 
 #settings-page {
@@ -58,9 +40,9 @@
 	body {
 		height: auto;
 		overflow: visible;
-		background-color: var(--lr-bg);
-		color: var(--lr-fg);
-		font: 15px/1.45 var(--lr-body);
+		background-color: hsl(var(--background));
+		color: hsl(var(--foreground));
+		font: var(--text-sm) / var(--text-sm-lh) var(--font-body);
 	}
 
 	[hidden] {
@@ -82,9 +64,9 @@
 	padding: 36px 40px;
 	display: grid;
 	grid-template-columns: 200px minmax(0, 1fr);
-	gap: 40px;
-	color: var(--lr-fg);
-	font: 15px/1.45 var(--lr-body);
+	gap: 32px 40px;
+	color: hsl(var(--foreground));
+	font: var(--text-sm) / var(--text-sm-lh) var(--font-body);
 
 	*,
 	*::before,
@@ -92,9 +74,9 @@
 		box-sizing: border-box;
 	}
 
-	button,
-	select,
-	input {
+	button:not([class*='lr-']),
+	select:not(.lr-select),
+	input:not(.lr-input) {
 		font: inherit;
 		color: inherit;
 	}
@@ -102,9 +84,16 @@
 	// Keyboard focus is always visible.
 	:is(button, a, select, input, summary):focus-visible,
 	.checkbox-container:focus-within {
-		outline: 2px solid var(--lr-accent);
+		outline: 2px solid hsl(var(--ring));
 		outline-offset: 2px;
 		box-shadow: none;
+	}
+	// The shared classes draw their own ring; keep the outline off them so it is not doubled.
+	:is(.lr-btn, .lr-input, .lr-select):focus-visible {
+		outline: none;
+	}
+	.lr-btn:focus-visible {
+		box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
 	}
 
 	.lr-sr-only {
@@ -122,21 +111,35 @@
 	.lr-head {
 		grid-column: 1 / -1;
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 12px;
+
+		.lr-tile {
+			width: 40px;
+			height: 40px;
+			overflow: hidden;
+
+			img {
+				display: block;
+				width: 100%;
+				height: 100%;
+			}
+		}
 
 		h1 {
 			margin: 0;
-			font: 500 30px/1.2 var(--lr-display);
+			font: 700 var(--text-xl) / var(--text-xl-lh) var(--font-heading);
+			letter-spacing: -0.02em;
 		}
 
 		.brand {
-			color: var(--lr-mfg);
-			font-size: 14px;
+			align-self: center;
+			color: hsl(var(--muted-foreground));
+			font-size: var(--text-sm);
 		}
 	}
 
-	// --- navigation ---------------------------------------------------
+	// --- navigation: a vertical list, the current section is tinted ---------
 	.lr-nav {
 		position: sticky;
 		top: 24px;
@@ -169,41 +172,35 @@
 			align-items: center;
 			gap: 10px;
 			width: 100%;
-			min-height: 40px;
-			padding: 9px 10px;
+			min-height: 44px;
+			padding: 9px 12px;
 			border: 0;
-			border-radius: 6px;
+			border-radius: var(--radius-sm);
 			background: none;
 			box-shadow: none;
 			justify-content: flex-start;
-			color: var(--lr-mfg);
+			color: hsl(var(--muted-foreground));
 			text-align: left;
-			font-weight: 400;
+			font-size: var(--text-base);
+			font-weight: 600;
 			cursor: pointer;
 
 			&:hover {
-				background: var(--lr-muted);
+				background: hsl(var(--accent-soft));
+				color: hsl(var(--foreground));
 			}
 
 			&[aria-current='page'] {
-				background: var(--lr-accent-l);
-				color: var(--lr-accent-fg);
-				font-weight: 600;
+				background: hsl(var(--accent));
+				color: hsl(var(--accent-foreground));
 			}
 		}
 
-		.dot {
-			display: block;
+		button .lr-dot {
+			display: inline-block;
 			flex: none;
-			align-self: center;
 			width: 7px;
-			min-width: 7px;
-			height: 7px;
-			min-height: 7px;
-			padding: 0;
-			border-radius: 50%;
 			margin-left: auto;
-			background: var(--lr-amber);
 		}
 	}
 
@@ -216,7 +213,7 @@
 
 	.settings-section.lr-pane {
 		display: none;
-		max-width: 620px;
+		max-width: 640px;
 		min-width: 0;
 		margin: 0;
 		padding: 0;
@@ -231,26 +228,24 @@
 	.lr-h2 {
 		margin: 0 0 4px;
 		padding: 0;
-		font: 500 20px/1.3 var(--lr-display);
+		font: 700 var(--text-lg) / var(--text-lg-lh) var(--font-heading);
+		letter-spacing: -0.01em;
 	}
 
 	.lr-h3 {
 		margin: 0 0 4px;
 		padding: 0;
-		font-size: 15px;
-		font-weight: 600;
+		font: 600 var(--text-base) / var(--text-base-lh) var(--font-heading);
 	}
 
 	.lr-sub {
 		margin: 0 0 16px;
 		max-width: 60ch;
-		color: var(--lr-mfg);
-		font-size: 14px;
+		color: hsl(var(--muted-foreground));
+		font-size: var(--text-sm);
 	}
 
-	.hint {
-		color: var(--lr-mfg);
-		font-size: 13px;
+	.lr-help {
 		margin: 8px 0 0;
 	}
 
@@ -262,213 +257,125 @@
 		margin: 0 0 18px;
 	}
 
-	// --- list rows ------------------------------------------------------
+	// --- list rows: .lr-card.lr-list of .lr-row ------------------------------
 	.lr-group {
 		margin: 0 0 24px;
-		border-top: 1px solid var(--lr-border);
+		padding: 4px 16px;
 	}
 
-	.lrs-row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		min-height: 52px;
-		padding: 12px 0;
-		border-bottom: 1px solid var(--lr-border);
+	.lr-row {
+		align-items: start;
+		min-height: 56px;
 		margin: 0;
 
-		.main {
-			flex: 1;
-			min-width: 0;
-		}
-
-		.t {
+		.lr-row-title {
 			display: flex;
 			align-items: center;
 			gap: 8px;
 			flex-wrap: wrap;
-			font-weight: 500;
+			font-size: var(--text-base);
+			line-height: var(--text-base-lh);
 		}
 
-		.d {
-			margin-top: 2px;
-			color: var(--lr-mfg);
-			font-size: 14px;
+		// Settings rows hold full sentences; the shared clamp is for list rows.
+		.lr-row-sub {
+			display: block;
+			-webkit-line-clamp: unset;
+			overflow: visible;
+			font-size: var(--text-sm);
 		}
 
-		.v {
-			color: var(--lr-mfg);
-			font-size: 14px;
+		.lr-row-trail {
+			display: block;
 			white-space: nowrap;
 		}
 
-		.lrs-btn.link {
+		.lr-btn-link {
 			margin-top: 4px;
 		}
-	}
 
-	// YouTube: the source choices sit inside its row, so the row grows tall.
-	// Its own switch stays at the top, next to the title, not centred on the whole block.
-	.sync-service[data-service="youtube"] {
-		align-items: flex-start;
-	}
-
-	.lr-yt-extras {
-		margin-top: 12px;
-
-		.lr-yt-sub {
-			padding: 8px 0;
-			border-bottom: none;
-		}
-
-		.lrs-field {
-			margin: 8px 0 4px;
+		// A row with a trailing switch: the switch sits in the last column.
+		> .checkbox-container {
+			grid-column: 3;
+			align-self: start;
+			margin-top: 1px;
 		}
 	}
 
-	a.lrs-row {
-		color: inherit;
-		text-decoration: none;
-
-		&:hover .t {
-			color: var(--lr-accent);
-		}
+	.lr-row.shortcut-item {
+		align-items: center;
 	}
 
-	.num {
-		align-self: flex-start;
+	.lr-row-lead.lr-num {
+		align-self: start;
 		margin-top: 2px;
 		width: 24px;
 		height: 24px;
-		flex-shrink: 0;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: 50%;
-		background: var(--lr-muted);
-		color: var(--lr-mfg);
-		font-size: 12px;
+		background: hsl(var(--secondary));
+		color: hsl(var(--muted-foreground));
+		font-size: var(--text-2xs);
 		font-weight: 600;
 	}
 
-	.lr-tag {
-		padding: 1px 8px;
-		border-radius: 999px;
-		margin: 0;
-		background: color-mix(in oklab, var(--lr-amber) 10%, var(--lr-card));
-		color: var(--lr-amber);
-		font-size: 12px;
-		font-weight: 500;
+	// YouTube: the source choices sit inside its row.
+	// The sub-rows reach under the main row's switch column (44px switch + 12px gap) so their
+	// switches share its right edge.
+	.lr-yt-extras {
+		margin-top: 12px;
+		margin-right: -56px;
+
+		.lr-yt-sub {
+			padding: 8px 0;
+		}
+
+		.lr-field {
+			margin: 8px 0 4px;
+		}
+	}
+
+	a.lr-row {
+		color: inherit;
+		text-decoration: none;
+
+		&:hover .lr-row-title {
+			color: hsl(var(--primary));
+		}
 	}
 
 	kbd {
 		padding: 4px 7px;
-		border: 1px solid var(--lr-border);
+		border: 1px solid hsl(var(--border));
 		border-bottom-width: 2px;
-		border-radius: 5px;
-		background: var(--lr-card);
-		color: var(--lr-fg);
-		font: 500 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+		border-radius: var(--radius-xs);
+		background: hsl(var(--card));
+		color: hsl(var(--foreground));
+		font: 500 var(--text-xs) / 1 var(--font-mono);
 	}
 
-	// --- buttons, fields ------------------------------------------------
-	.lrs-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: auto;
-		height: auto;
-		min-height: 40px;
-		padding: 0 14px;
-		border: 1px solid var(--lr-border);
-		border-radius: var(--lr-r);
-		background: var(--lr-card);
-		box-shadow: none;
-		color: var(--lr-fg);
-		font-weight: 500;
-		text-decoration: none;
-		white-space: nowrap;
-		cursor: pointer;
-
-		&:hover {
-			background: var(--lr-muted);
-		}
-
-		&.primary {
-			background: var(--lr-accent);
-			border-color: var(--lr-accent);
-			color: var(--lr-on-accent);
-
-			&:hover {
-				background: var(--lr-accent);
-				filter: brightness(1.08);
-			}
-		}
-
-		&.link {
-			min-height: 32px;
-			padding: 0;
-			border: 0;
-			background: none;
-			color: var(--lr-accent);
-
-			&:hover {
-				background: none;
-				text-decoration: underline;
-			}
-		}
-
-		&[disabled] {
-			opacity: 0.55;
-			cursor: default;
-		}
-	}
-
-	.lrs-field {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
+	// --- fields ---------------------------------------------------------
+	.lr-field {
 		margin: 0 0 16px;
 
-		label {
+		.lr-btn {
+			justify-self: start;
+		}
+
+		.lr-label {
 			margin: 0;
-			font-size: 14px;
-			font-weight: 500;
 		}
 
-		input[type='text'],
-		input[type='password'] {
-			width: 100%;
-			height: auto;
-			min-height: 40px;
-			padding: 0 12px;
-			border: 1px solid var(--lr-border);
-			border-radius: var(--lr-r);
-			background: var(--lr-card);
-			box-shadow: none;
-			color: var(--lr-fg);
-			font-size: 14px;
-		}
-
-		.hint {
+		.lr-help {
 			margin: 0;
 		}
 	}
 
-	.lrs-select {
+	.lr-select {
 		width: auto;
-		height: auto;
-		min-height: 40px;
-		padding: 0 10px;
-		border: 1px solid var(--lr-border);
-		border-radius: var(--lr-r);
-		background-color: var(--lr-card);
-		background-image: none;
-		-webkit-appearance: menulist;
-		appearance: auto;
-		box-shadow: none;
-		color: var(--lr-fg);
-		font-size: 15px;
+		min-width: 200px;
 	}
 
 	.lr-sched {
@@ -478,7 +385,7 @@
 		flex-wrap: wrap;
 		margin: 0 0 8px;
 
-		.lrs-field {
+		.lr-field {
 			margin: 0;
 		}
 	}
@@ -489,43 +396,26 @@
 		align-items: center;
 		gap: 12px;
 		margin: 0 0 20px;
-		padding: 14px 16px;
-		border: 1px solid var(--lr-border);
-		border-radius: var(--lr-r);
-		background: var(--lr-card);
 
-		.main {
+		.lr-dot {
+			width: 10px;
+			height: 10px;
+		}
+
+		.lr-row-body {
 			flex: 1;
 			min-width: 0;
 		}
 
-		.t {
-			font-weight: 600;
+		.lr-row-title {
+			font-size: var(--text-base);
+			line-height: var(--text-base-lh);
+			display: block;
+			-webkit-line-clamp: unset;
 		}
 
-		.hint {
+		.lr-help {
 			margin: 0;
-		}
-	}
-
-	.lr-pip {
-		width: 10px;
-		height: 10px;
-		flex-shrink: 0;
-		border-radius: 50%;
-		background: var(--lr-mfg);
-
-		&.ok {
-			background: var(--lr-green);
-		}
-
-		&.warn {
-			background: var(--lr-amber);
-		}
-
-		&.run {
-			background: var(--lr-accent);
-			animation: lrs-pulse 1.4s ease-in-out infinite;
 		}
 	}
 
@@ -533,14 +423,16 @@
 	.lr-details {
 		margin-top: 8px;
 		padding-top: 12px;
-		border-top: 1px solid var(--lr-border);
+		border-top: 1px solid hsl(var(--border));
 
 		summary {
 			display: flex;
 			align-items: center;
-			min-height: 32px;
-			color: var(--lr-mfg);
-			font-size: 14px;
+			min-height: 36px;
+			border-radius: var(--radius-xs);
+			color: hsl(var(--muted-foreground));
+			font-size: var(--text-sm);
+			font-weight: 600;
 			cursor: pointer;
 		}
 
@@ -556,12 +448,12 @@
 		flex-shrink: 0;
 		width: 44px;
 		height: 26px;
-		border-radius: 999px;
-		background-color: var(--lr-border);
+		border-radius: var(--radius-pill);
+		background-color: hsl(var(--input));
 		box-shadow: none;
 		outline: none;
 		cursor: pointer;
-		transition: background-color 0.2s;
+		transition: background-color var(--dur-state) var(--ease-out);
 
 		&::before {
 			display: none;
@@ -576,10 +468,10 @@
 			height: 20px;
 			margin: 0;
 			border-radius: 50%;
-			background: #fff;
-			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+			background: hsl(var(--card));
+			box-shadow: 0 1px 2px hsl(var(--lr-navy-900) / 0.3);
 			transform: none;
-			transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+			transition: transform var(--dur-state) var(--ease-out);
 		}
 
 		&:active::after {
@@ -587,7 +479,7 @@
 		}
 
 		&.is-enabled {
-			background-color: var(--lr-green);
+			background-color: hsl(var(--primary));
 
 			&::after {
 				left: 3px;
@@ -612,26 +504,16 @@
 	}
 }
 
-@keyframes lrs-pulse {
-	50% {
-		opacity: 0.35;
-	}
-}
-
 @media (prefers-reduced-motion: reduce) {
 	#settings-page #lr-settings {
 		.checkbox-container,
 		.checkbox-container::after {
 			transition: none;
 		}
-
-		.lr-pip.run {
-			animation: none;
-		}
 	}
 }
 
-// Narrow window: the nav becomes a tab row above the pane.
+// Narrow window: the nav becomes a row above the pane.
 @media (max-width: 768px) {
 	#settings-page #lr-settings {
 		grid-template-columns: 1fr;
@@ -645,7 +527,7 @@
 				flex-direction: row;
 				overflow-x: auto;
 				padding-bottom: 8px;
-				border-bottom: 1px solid var(--lr-border);
+				border-bottom: 1px solid hsl(var(--border));
 			}
 
 			button {
@@ -653,7 +535,7 @@
 				white-space: nowrap;
 			}
 
-			.dot {
+			.lr-dot {
 				margin-left: 4px;
 			}
 		}
