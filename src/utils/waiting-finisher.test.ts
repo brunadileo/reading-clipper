@@ -3,7 +3,7 @@ import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
 import { endpointUrl, parseWaitingItems } from './waiting-api';
 import type { WaitingApi, WaitingItem, ProvideResult } from './waiting-api';
 import {
-	AUTO_LIMIT, AUTO_MIN_GAP_MS, FINISH_KEY, NOW_LIMIT, emptyFinishState, pruneAttempts, runFinisher, shouldRun,
+	AUTO_LIMIT, AUTO_MIN_GAP_MS, FINISH_KEY, NOW_LIMIT, emptyFinishState, ITEM_RETRY_MS, pruneAttempts, runFinisher, shouldRun,
 	type FinisherDeps,
 } from './waiting-finisher';
 import { PREVIEW_NOTE } from './substack-sync';
@@ -118,6 +118,61 @@ describe('trigger throttle', () => {
 		expect(r.skipped).toBe('throttled');
 		expect(fetched).toEqual([]);
 		expect(provided).toEqual([]);
+	});
+});
+
+describe('push wake (READ-247)', () => {
+	const now = 50_000_000;
+	it('a push has no gap, and keeps the other rules', () => {
+		const at = (ms: number) => ({ ...emptyFinishState(), lastAttemptAt: now - ms });
+		expect(shouldRun('push', at(5 * 60_000), true, now)).toBeNull();
+		expect(shouldRun('push', at(1000), true, now)).toBeNull();
+		expect(shouldRun('push', { ...emptyFinishState(), enabled: false }, true, now)).toBe('disabled');
+		expect(shouldRun('push', emptyFinishState(), false, now)).toBe('no-token');
+		expect(shouldRun('push', { ...emptyFinishState(), running: true, lastAttemptAt: now - 60_000 }, true, now)).toBe('busy');
+	});
+	it('the rerun after a busy wake has no gap', () => {
+		expect(shouldRun('wake-rerun', { ...emptyFinishState(), lastAttemptAt: now - 1000 }, true, now)).toBeNull();
+	});
+	it('two wakes 30 seconds apart both finish their new item', async () => {
+		const a = setup({ items: [item(1)], pages: () => ({ status: 200, html: full() }) });
+		expect((await runFinisher(a.deps, 'push')).finished).toBe(1);
+		const b = setup({ items: [item(2)], pages: () => ({ status: 200, html: full() }), state: { lastAttemptAt: 10_000_000 - 30_000 } });
+		const r = await runFinisher(b.deps, 'push');
+		expect(r.skipped).toBeNull();
+		expect(r.finished).toBe(1);
+		expect(b.provided.map((p) => p.id)).toEqual(['i2']);
+	});
+	it('a new item is finished by a push at once', async () => {
+		const { deps, provided } = setup({ items: [item(1)], pages: () => ({ status: 200, html: full() }) });
+		const r = await runFinisher(deps, 'push');
+		expect(r.finished).toBe(1);
+		expect(provided.map((p) => p.id)).toEqual(['i1']);
+	});
+});
+
+describe('hourly retry per item (READ-247)', () => {
+	const failing = { pages: () => ({ status: 500, html: '' }), noFallback: true };
+	it('an automatic run skips an item tried under 60 minutes ago, and records the try', async () => {
+		const a = setup({ items: [item(1), item(2)], ...failing, state: { triedAt: { i1: 10_000_000 - 10 * 60_000 } } });
+		await runFinisher(a.deps, 'alarm');
+		expect(a.fetched).toEqual(['https://site2.example.com/a']);
+		expect((await a.store.get(FINISH_KEY)).triedAt.i2).toBeGreaterThan(0);
+	});
+	it('an item tried more than 60 minutes ago is tried again', async () => {
+		const a = setup({ items: [item(1)], ...failing, state: { triedAt: { i1: 10_000_000 - ITEM_RETRY_MS - 5000 } } });
+		await runFinisher(a.deps, 'push');
+		expect(a.fetched.length).toBe(1);
+	});
+	it('Sync now tries everything', async () => {
+		const a = setup({ items: [item(1)], ...failing, state: { triedAt: { i1: 10_000_000 - 1000 } } });
+		await runFinisher(a.deps, 'now');
+		expect(a.fetched.length).toBe(1);
+	});
+	it('forgets items that left the list', async () => {
+		const a = setup({ items: [item(1)], ...failing, state: { triedAt: { gone: 1 } } });
+		await runFinisher(a.deps, 'now');
+		expect(Object.keys((await a.store.get(FINISH_KEY)).triedAt)).toEqual(['i1']);
 	});
 });
 

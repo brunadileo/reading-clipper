@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { memoryStore } from './sync-test-helpers';
 import {
 	intervalMinutes, isDue, isOwnPageSender, isRunning, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
-	JOB_PAUSE_MS, SCHEDULE_KEY, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
+	JOB_PAUSE_MS, PENDING_WAKE_KEY, SCHEDULE_KEY, markPendingWake, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
 } from './sync-schedule';
 
 const HOUR = 3_600_000;
@@ -41,8 +41,8 @@ describe('frequency to interval', () => {
 			if (m !== null) expect(m).toBeGreaterThanOrEqual(60);
 		}
 	});
-	it('defaults to twice a day', () => {
-		expect(DEFAULT_FREQUENCY).toBe('twiceDaily');
+	it('defaults to every hour', () => {
+		expect(DEFAULT_FREQUENCY).toBe('hourly');
 	});
 	it('"Only when I press Sync now" never schedules', () => {
 		expect(intervalMinutes('manual')).toBeNull();
@@ -202,5 +202,53 @@ describe('stale lock and senders', () => {
 		expect(isOwnPageSender({ id: 'abc', url: 'https://lazyreader.app/x', tab: { id: 1 } }, 'abc', base)).toBe(false);
 		expect(isOwnPageSender({ id: 'other', url: `${base}settings.html` }, 'abc', base)).toBe(false);
 		expect(isOwnPageSender({ id: 'abc' }, 'abc', base)).toBe(false);
+	});
+});
+
+describe('one-time move to the hourly default (READ-247)', () => {
+	it('a saved twiceDaily without defaultV becomes hourly once and is stored', async () => {
+		const h = harness({ [SCHEDULE_KEY]: { frequency: 'twiceDaily', lastRunAt: 5 } });
+		const s = await loadSchedule(h.store);
+		expect(s.frequency).toBe('hourly');
+		expect(s.lastRunAt).toBe(5);
+		expect(h.store.data[SCHEDULE_KEY]).toMatchObject({ frequency: 'hourly', defaultV: 2 });
+	});
+	it('a later choice of twiceDaily sticks', async () => {
+		const h = harness({ [SCHEDULE_KEY]: { frequency: 'twiceDaily' } });
+		const s = await loadSchedule(h.store);
+		await saveSchedule(h.store, { ...s, frequency: 'twiceDaily' });
+		expect((await loadSchedule(h.store)).frequency).toBe('twiceDaily');
+	});
+	it('other saved frequencies stay; a fresh install is hourly', async () => {
+		expect((await loadSchedule(harness({ [SCHEDULE_KEY]: { frequency: 'daily' } }).store)).frequency).toBe('daily');
+		expect((await loadSchedule(harness().store)).frequency).toBe('hourly');
+	});
+});
+
+describe('pending push wake (READ-247)', () => {
+	it('reruns the wake job once when the flag was set during the run, and clears it', async () => {
+		const h = harness();
+		const log: string[] = [];
+		const wake = job('wake', log);
+		const main = job('a', log, { run: async () => { await markPendingWake(h.store); log.push('a'); return 'ok'; } });
+		await runSequence([main], h.deps, 'now', { wakeJob: wake });
+		expect(log).toEqual(['a', 'start:wake', 'end:wake']);
+		expect(h.store.data[PENDING_WAKE_KEY]).toBe(false);
+		await runSequence([job('a', log)], h.deps, 'now', { wakeJob: wake });
+		expect(log.filter((l) => l === 'start:wake').length).toBe(1);
+	});
+	it('a second trigger while running is busy; the caller marks the wake', async () => {
+		const h = harness();
+		const log: string[] = [];
+		let inner: Awaited<ReturnType<typeof runSequence>> | undefined;
+		const wake = job('wake', log);
+		const main = job('a', log, { run: async () => {
+			inner = await runSequence([wake], h.deps, 'finish-push', { recordRun: false });
+			if (inner.skipped === 'busy') await markPendingWake(h.store);
+			return 'ok';
+		} });
+		await runSequence([main], h.deps, 'now', { wakeJob: wake });
+		expect(inner?.skipped).toBe('busy');
+		expect(log).toEqual(['start:wake', 'end:wake']);
 	});
 });

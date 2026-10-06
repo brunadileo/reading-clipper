@@ -13,7 +13,12 @@ export const FREQUENCY_LABELS: Record<SyncFrequency, string> = {
 	daily: 'Once a day',
 	manual: 'Only when I press Sync now',
 };
-export const DEFAULT_FREQUENCY: SyncFrequency = 'twiceDaily';
+// READ-247 choice 11: Every hour is the default now. SCHEDULE_VERSION 2 marks a
+// schedule saved after that change, so the one-time move from Twice a day runs once.
+export const DEFAULT_FREQUENCY: SyncFrequency = 'hourly';
+export const SCHEDULE_VERSION = 2;
+// Set when a push wake found the sequence busy; the sequence reruns finish once when it ends.
+export const PENDING_WAKE_KEY = 'finish:pendingWake';
 export const MIN_INTERVAL_MINUTES = 60;
 export const STALE_RUN_MS = 15 * 60 * 1000;
 export const JOB_PAUSE_MS = 3000;
@@ -49,7 +54,7 @@ export function isDue(freq: SyncFrequency, lastRunAt: number | null, now: number
 	return due !== null && now >= due;
 }
 
-export type SequenceTrigger = 'alarm' | 'startup' | 'idle' | 'now' | 'older' | 'finish-now';
+export type SequenceTrigger = 'alarm' | 'startup' | 'idle' | 'now' | 'older' | 'finish-now' | 'finish-push';
 
 export interface ScheduleState {
 	frequency: SyncFrequency;
@@ -61,6 +66,7 @@ export interface ScheduleState {
 	step: { index: number; total: number; name: string } | null;
 	lastFinishedAt: number | null;
 	lastSummary: string | null;
+	defaultV?: number;
 }
 
 export const emptySchedule = (): ScheduleState => ({
@@ -71,12 +77,19 @@ export const emptySchedule = (): ScheduleState => ({
 	step: null,
 	lastFinishedAt: null,
 	lastSummary: null,
+	defaultV: SCHEDULE_VERSION,
 });
 
 export async function loadSchedule(store: SyncStore): Promise<ScheduleState> {
 	const saved = await store.get(SCHEDULE_KEY);
 	const s = { ...emptySchedule(), ...(saved && typeof saved === 'object' ? saved : {}) };
 	if (!isFrequency(s.frequency)) s.frequency = DEFAULT_FREQUENCY;
+	// One-time move (READ-247 choice 11): an older saved schedule has no defaultV.
+	if (saved && typeof saved === 'object' && (saved as any).defaultV === undefined) {
+		if (s.frequency === 'twiceDaily') s.frequency = 'hourly';
+		s.defaultV = SCHEDULE_VERSION;
+		await store.set(SCHEDULE_KEY, s);
+	}
 	return s;
 }
 
@@ -111,12 +124,14 @@ let inFlight = false;
  * not "manual"; 'now', 'older' and 'finish-now' run at once. A second trigger
  * while a run is going is ignored. Never throws.
  * recordRun false (Load older, web Finish now) leaves the schedule's clock alone.
+ * wakeJob: when a push wake arrived during the run (PENDING_WAKE_KEY), it runs
+ * once more at the end, so items the run itself parked are not left for the next hour.
  */
 export async function runSequence(
 	jobs: SyncJob[],
 	deps: SequenceDeps,
 	trigger: SequenceTrigger,
-	opts: { recordRun?: boolean } = {},
+	opts: { recordRun?: boolean; wakeJob?: SyncJob } = {},
 ): Promise<SequenceResult> {
 	const out: SequenceResult = { skipped: null, ran: [] };
 	if (inFlight) { out.skipped = 'busy'; return out; }
@@ -160,6 +175,18 @@ export async function runSequence(
 				lines.push(`${job.name}: failed, ${message}`);
 			}
 		}
+		if (opts.wakeJob && await takePendingWake(deps.store)) {
+			if (active.length > 0) await deps.sleep(JOB_PAUSE_MS);
+			try {
+				const message = await opts.wakeJob.run();
+				out.ran.push({ id: opts.wakeJob.id, ok: true, message });
+				lines.push(`${opts.wakeJob.name}: ${message}`);
+			} catch (e) {
+				const message = e instanceof Error ? e.message : String(e);
+				out.ran.push({ id: opts.wakeJob.id, ok: false, message });
+				lines.push(`${opts.wakeJob.name}: failed, ${message}`);
+			}
+		}
 		state.running = false;
 		state.step = null;
 		state.lastFinishedAt = deps.now();
@@ -177,6 +204,17 @@ export async function runSequence(
 	} finally {
 		inFlight = false;
 	}
+}
+
+/** A push wake found the sequence busy: remember it for the end of the run. */
+export const markPendingWake = (store: SyncStore) => store.set(PENDING_WAKE_KEY, true);
+
+async function takePendingWake(store: SyncStore): Promise<boolean> {
+	try {
+		if (!(await store.get(PENDING_WAKE_KEY))) return false;
+		await store.set(PENDING_WAKE_KEY, false);
+		return true;
+	} catch { return false; }
 }
 
 const ago = (ms: number): string => {

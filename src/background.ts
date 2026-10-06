@@ -10,6 +10,7 @@ import { hasStoredHighlights } from './utils/url-utils';
 import { IS_STORE_BUILD } from './utils/store-build';
 import { initSyncRunner } from './utils/sync-runner';
 import { initWaitingRunner } from './utils/waiting-runner';
+import { initClipperPush } from './utils/clipper-push-runner';
 import { captureWithToken } from './utils/reading-sender';
 import { acceptConnect } from './utils/reading-token';
 
@@ -1217,6 +1218,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 // READ-37/39: Substack and Instagram sync (off until the user turns each on in Settings).
 initSyncRunner();
 initWaitingRunner();
+initClipperPush();
 
 // Initialize the extension
 initialize().catch(error => {
