@@ -6,7 +6,7 @@ import browser from '../utils/browser-polyfill';
 import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
-import { costWarning, extractPlaylistId, FIRST_RUN_VIDEOS, hasSource } from '../utils/youtube-sync';
+import { costWarning, extractPlaylistId, FIRST_RUN_VIDEOS, hasSource, watchLaterNeverRan } from '../utils/youtube-sync';
 import { IS_STORE_BUILD } from '../utils/store-build';
 import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
 
@@ -47,12 +47,14 @@ export function describeSyncStatus(service: SyncService, s: SyncState, now: numb
 // Read inside the click that turns YouTube on, where nothing can be awaited first.
 let youtubeNeverRan = true;
 let youtubeSavedPlaylist: string | null = null;
+let youtubeWlNeverRan = true;
 
 const YT_PLAYLIST_LINK = 'https://www.youtube.com/playlist?list=';
 
 function refreshYoutubeExtras(state: SyncState): void {
 	youtubeNeverRan = state.lastSuccess === null;
 	youtubeSavedPlaylist = state.youtube?.playlistId ?? null;
+	youtubeWlNeverRan = watchLaterNeverRan(state);
 	const extras = document.getElementById('sync-youtube-extras');
 	if (extras) extras.hidden = !state.enabled;
 	const cfg = state.youtube;
@@ -172,6 +174,11 @@ function setupYoutubeExtras(status: HTMLElement | null): void {
 	};
 	for (const [box, key] of [[wl, 'watchLater'], [shorts, 'includeShorts']] as const) {
 		box?.addEventListener('change', async () => {
+			// Ticking Watch later when it has never run starts a costly first read; confirm before any await.
+			if (key === 'watchLater' && box.checked && youtubeWlNeverRan && !window.confirm(`${costWarning(FIRST_RUN_VIDEOS)}\n\nRead Watch later?`)) {
+				box.checked = false;
+				return;
+			}
 			try {
 				await send({ [key]: box.checked });
 			} catch (e) {

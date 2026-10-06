@@ -11,8 +11,11 @@
 //
 // Every request uses credentials 'omit': captions need no sign-in, and nothing
 // here is tied to the account. Failure never blocks a save: the caller sends
-// the link alone. 429 or a "not a bot" answer sets `blocked`, and the caller
-// stops transcript attempts for the rest of its run.
+// the link alone. 429 or a "not a bot" answer sets `blocked`; a timeout, network
+// error, 5xx, 403 or empty caption body sets `transient`. Either way the caller
+// stops transcript attempts for the rest of its run, and the finisher counts no
+// attempt: only a definite answer (no captions on any client, under 50 words,
+// a video that cannot be played) is a miss.
 import { countWords } from './sync-core';
 import type { TranscriptRead } from './youtube-sync';
 
@@ -182,8 +185,9 @@ export function buildTranscriptMarkdown(description: string, transcript: string)
 
 /**
  * Read one video's transcript. Never throws. text is null when nothing usable
- * was read (no captions, under 50 words, a refusal, any error); blocked is true
- * when YouTube answered 429 or a bot check.
+ * was read. blocked is true when YouTube answered 429 or a bot check; transient
+ * is true when the answer was not definite (timeout, network error, 5xx, 403,
+ * empty caption body), so a retry later may work. Neither set: a definite miss.
  */
 export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: string): Promise<TranscriptRead> {
 	if (!/^[\w-]{6,20}$/.test(videoId)) return { text: null, blocked: false };
@@ -192,6 +196,7 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 			if (e instanceof Blocked) throw e;
 			return null;
 		});
+		let transient = false;
 		for (const pc of PLAYER_CLIENTS) {
 			try {
 				const res = await get(fetchFn, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
@@ -200,7 +205,11 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 					body: JSON.stringify({ videoId, context: { client: pc.client(visitorData) } }),
 				});
 				if (res.status === 429) throw new Blocked('429');
-				if (!res.ok) continue;
+				if (!res.ok) {
+					// 5xx, 403 and the like say nothing about this video.
+					transient = true;
+					continue;
+				}
 				const data: any = await res.json();
 				const status = data?.playabilityStatus?.status;
 				const reason = String(data?.playabilityStatus?.reason ?? '');
@@ -215,16 +224,21 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 				const track = pc.fallback ? pickFallbackTrack(renderer) : pickCaptionTrack(renderer);
 				if (!track?.baseUrl || !isYouTubeHost(track.baseUrl)) continue;
 				const transcript = await fetchCaptionText(fetchFn, track.baseUrl);
-				if (!transcript.trim()) continue;
+				if (!transcript.trim()) {
+					// A caption track that comes back empty is a bad answer, not "no captions".
+					transient = true;
+					continue;
+				}
 				if (countWords(transcript) < MIN_TRANSCRIPT_WORDS) return { text: null, blocked: false };
 				return { text: buildTranscriptMarkdown(String(data?.videoDetails?.shortDescription ?? ''), transcript), blocked: false };
 			} catch (e) {
 				if (e instanceof Blocked) throw e;
-				// This client failed (network, bad JSON): try the next.
+				// This client failed (timeout, network, bad JSON): try the next.
+				transient = true;
 			}
 		}
-		return { text: null, blocked: false };
+		return transient ? { text: null, blocked: false, transient: true } : { text: null, blocked: false };
 	} catch (e) {
-		return { text: null, blocked: e instanceof Blocked };
+		return e instanceof Blocked ? { text: null, blocked: true } : { text: null, blocked: false, transient: true };
 	}
 }

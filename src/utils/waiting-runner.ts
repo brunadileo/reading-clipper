@@ -158,7 +158,7 @@ async function makeDeps(): Promise<FinisherDeps> {
 // triggers that arrive together both start (each reads it before either saves).
 let inFlight: ReturnType<typeof runFinisher> | null = null;
 export async function runFinish(trigger: FinishTrigger) {
-	if (inFlight) return { skipped: 'busy' as const, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsStuck: 0, transcriptsBlocked: false, stopped: null };
+	if (inFlight) return { skipped: 'busy' as const, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsBlocked: false, stopped: null };
 	inFlight = (async () => {
 		try {
 			return await runFinisher(await makeDeps(), trigger);

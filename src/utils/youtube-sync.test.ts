@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { continuationItem, continuationResponse, initialData, playlistPageHtml, vid, videoRow } from './fixtures/youtube/playlist';
 import {
 	ALARM_RUN_VIDEOS, MANUAL_RUN_VIDEOS, applyYoutubeConfig, checkPlaylist, hasSource, emptyYoutubeConfig, extractInitialData, extractPlaylistId,
-	parseContinuation, parsePlaylistPage, parseRows, parseYtcfg, runYoutubeSync, type YoutubeDeps,
+	parseContinuation, parsePlaylistPage, parseRows, parseYtcfg, runYoutubeSync, watchLaterNeverRan, RESTART_MAX_PAGES, type YoutubeDeps,
 } from './youtube-sync';
 import { emptyState } from './sync-core';
 import { makeDeps, memoryStore, type Route } from './sync-test-helpers';
@@ -253,6 +253,52 @@ describe('runYoutubeSync', () => {
 		const r2 = await runYoutubeSync(again.deps, 'older');
 		expect(r2.sent).toBe(50);
 		expect(store.data['sync:youtube'].youtube.cursors.wl.exhausted).toBe(true);
+	});
+
+	it('a 5xx on the stored Load older token ends the tap with a note and does not restart', async () => {
+		const inner = ytRoute({ WL: { total: 250 } });
+		const { deps, store, sent } = makeDeps({ route: ytRoute({ WL: { total: 250 } }), store: enabled() });
+		await runYoutubeSync(deps, 'manual');
+		store.data['sync:youtube'].youtube.cursors.wl.older = 'stale-token';
+		const fiveXx: Route = (url, init) => (url.startsWith('https://www.youtube.com/youtubei/v1/browse') && String(init?.body).includes('stale-token') ? { status: 503 } : inner(url, init));
+		const again = makeDeps({ route: fiveXx, store });
+		const r = await runYoutubeSync(again.deps, 'older');
+		expect(again.sent).toHaveLength(0);
+		expect(r.note).toMatch(/problem on the next page/);
+		expect(store.data['sync:youtube'].youtube.cursors.wl.older).toBe('stale-token');
+	});
+
+	it('a restarted Load older walk stops at 30 pages, keeps the cursor and says to tap again', async () => {
+		const total = 100 * 40;
+		const { deps, store } = makeDeps({ route: ytRoute({ WL: { total } }), store: enabled() });
+		await runYoutubeSync(deps, 'manual');
+		// Everything on the first 33 pages is already known, so the walk has nothing new to add.
+		const st = store.data['sync:youtube'];
+		for (let i = 0; i < 33 * 100; i++) st.knownIds.push(`yt:${vid(i)}`);
+		st.youtube.cursors.wl.older = 'stale-token';
+		const inner = ytRoute({ WL: { total } });
+		let browseCalls = 0;
+		const route: Route = (url, init) => {
+			if (url.startsWith('https://www.youtube.com/youtubei/v1/browse')) {
+				browseCalls++;
+				if (String(init?.body).includes('stale-token')) return { status: 400 };
+			}
+			return inner(url, init);
+		};
+		const again = makeDeps({ route, store });
+		const r = await runYoutubeSync(again.deps, 'older');
+		expect(browseCalls).toBe(1 + RESTART_MAX_PAGES);
+		expect(r.note).toMatch(/tap it again to continue/);
+		expect(store.data['sync:youtube'].youtube.cursors.wl).toMatchObject({ older: `WL:${RESTART_MAX_PAGES + 1}`, exhausted: false });
+		expect(store.data['sync:youtube'].youtube.note).toMatch(/tap it again/);
+	});
+
+	it('watchLaterNeverRan follows the Watch later cursor', () => {
+		expect(watchLaterNeverRan({ ...emptyState() })).toBe(true);
+		expect(watchLaterNeverRan({ ...emptyState(), youtube: cfgWith() })).toBe(true);
+		const started = cfgWith();
+		started.cursors.wl.started = true;
+		expect(watchLaterNeverRan({ ...emptyState(), youtube: started })).toBe(false);
 	});
 
 	it('a video in both Watch later and the playlist is one item', async () => {

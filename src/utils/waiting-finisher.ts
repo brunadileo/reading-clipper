@@ -88,9 +88,7 @@ export interface FinishResult {
 	membersOnly: number;
 	unreadable: number;
 	retryLater: number;
-	// needs_transcript items given up on after MAX_ITEM_ATTEMPTS: they stay waiting, never marked unreadable.
-	transcriptsStuck: number;
-	// YouTube answered 429 or a bot check: no more transcript reads this run.
+	// YouTube answered 429, a bot check, or something not definite (timeout, 5xx): no more transcript reads this run.
 	transcriptsBlocked: boolean;
 	stopped: 'token' | 'rate-limited' | 'error' | null;
 }
@@ -173,7 +171,7 @@ async function gatherText(deps: FinisherDeps, url: string): Promise<string> {
 
 /** One finish run. Never throws; the outcome goes to state and the result. */
 export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): Promise<FinishResult> {
-	const result: FinishResult = { skipped: null, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsStuck: 0, transcriptsBlocked: false, stopped: null };
+	const result: FinishResult = { skipped: null, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsBlocked: false, stopped: null };
 	const state = await loadFinishState(deps.store);
 	const hasToken = await deps.hasToken();
 	const hasAccess = deps.hasAccess ? await deps.hasAccess() : true;
@@ -205,10 +203,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 			else result.finished++;
 		};
 
-		// A video given up on stays waiting and must not hold a slot in front of newer ones.
-		const stuck = (i: WaitingItem) => i.code === 'needs_transcript' && (state.attempts[i.id] ?? 0) >= MAX_ITEM_ATTEMPTS;
-		result.transcriptsStuck = listed.items.filter(stuck).length;
-		const todo = listed.items.filter((i) => !stuck(i) && (i.code !== 'needs_transcript' || !!deps.readTranscript)).slice(0, limit);
+		const todo = listed.items.filter((i) => i.code !== 'needs_transcript' || !!deps.readTranscript).slice(0, limit);
 
 		let first = true;
 		let transcriptsOff = false;
@@ -220,33 +215,41 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 
 			// YouTube: the transcript is read in the browser; the page itself is never fetched.
 			if (item.code === 'needs_transcript') {
-				if (transcriptsOff) continue; // not this item's fault: no attempt counted
-				const videoId = youtubeVideoId(item.url);
-				let text: string | null = null;
-				if (videoId) {
-					try {
-						const t = await deps.readTranscript!(videoId);
-						text = t.text;
-						if (t.blocked) { transcriptsOff = true; result.transcriptsBlocked = true; }
-					} catch {
-						text = null;
+				// Given up on earlier but the mark was refused: retry the mark, no new read.
+				let giveUp = (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS;
+				if (!giveUp) {
+					if (transcriptsOff) continue; // not this item's fault: no attempt counted
+					const videoId = youtubeVideoId(item.url);
+					let text: string | null = null;
+					let definite = true;
+					if (videoId) {
+						try {
+							const t = await deps.readTranscript!(videoId);
+							text = t.text;
+							if (t.blocked || t.transient) { definite = false; transcriptsOff = true; }
+							if (t.blocked) result.transcriptsBlocked = true;
+						} catch {
+							definite = false;
+							transcriptsOff = true;
+						}
 					}
-				}
-				if (!text) {
-					// A blocked answer says nothing about this video, so it costs no attempt.
-					if (!result.transcriptsBlocked) state.attempts[item.id] = (state.attempts[item.id] ?? 0) + 1;
-					if ((state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS) {
-						// Given up on: the item becomes failed ("No transcript") and leaves the waiting list.
-						const r = await deps.api.markUnreadable(item.id);
-						guard(r);
-						if (r.ok) { delete state.attempts[item.id]; result.unreadable++; } else result.retryLater++;
-					} else {
-						result.retryLater++;
+					if (text) {
+						await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text)));
+						await saveFinishState(deps.store, state);
+						continue;
 					}
-					await saveFinishState(deps.store, state);
-					continue;
+					// Only a definite answer (no captions, too short, cannot be played, no video id) costs an attempt.
+					if (definite) state.attempts[item.id] = (state.attempts[item.id] ?? 0) + 1;
+					giveUp = (state.attempts[item.id] ?? 0) >= MAX_ITEM_ATTEMPTS;
 				}
-				await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text)));
+				if (giveUp) {
+					// The item becomes failed ("No transcript") and leaves the waiting list.
+					const r = await deps.api.markUnreadable(item.id);
+					guard(r);
+					if (r.ok) { delete state.attempts[item.id]; result.unreadable++; } else result.retryLater++;
+				} else {
+					result.retryLater++;
+				}
 				await saveFinishState(deps.store, state);
 				continue;
 			}

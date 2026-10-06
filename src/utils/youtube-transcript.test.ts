@@ -202,6 +202,33 @@ describe('readYouTubeTranscript', () => {
 		expect(priv.calls.filter((c) => isPlayer(c.url))).toHaveLength(1);
 	});
 
+	it('timeouts, 5xx and 403 on the player call are transient, not a miss', async () => {
+		for (const status of [500, 503, 403]) {
+			const { fn, calls } = fakeYt((url) => (url.includes('/watch?v=') ? { text: WATCH } : isPlayer(url) ? { status } : undefined));
+			expect(await readYouTubeTranscript(fn, 'abcdefghijk')).toEqual({ text: null, blocked: false, transient: true });
+			expect(calls.filter((c) => isPlayer(c.url))).toHaveLength(4);
+		}
+		const timeout = (async (url: string) => {
+			if (String(url).includes('/watch?v=')) return new Response(WATCH);
+			throw new DOMException('timed out', 'TimeoutError');
+		}) as unknown as typeof fetch;
+		expect(await readYouTubeTranscript(timeout, 'abcdefghijk')).toEqual({ text: null, blocked: false, transient: true });
+	});
+
+	it('an empty caption body is transient; a later client with a definite answer cannot make it a miss', async () => {
+		const { fn } = fakeYt((url) => {
+			if (url.includes('/watch?v=')) return { text: WATCH };
+			if (isPlayer(url)) return { json: player };
+			if (isCaption(url)) return { text: '' };
+		});
+		expect(await readYouTubeTranscript(fn, VIDEO)).toEqual({ text: null, blocked: false, transient: true });
+	});
+
+	it('definite misses are not transient', async () => {
+		const none = fakeYt((url) => (url.includes('/watch?v=') ? { text: WATCH } : isPlayer(url) ? { json: playerWith([]) } : undefined));
+		expect((await readYouTubeTranscript(none.fn, 'abcdefghijk')).transient).toBeUndefined();
+	});
+
 	it('refuses a caption URL that is not on youtube.com', async () => {
 		const { fn, calls } = fakeYt((url) => {
 			if (url.includes('/watch?v=')) return { text: WATCH };
@@ -213,7 +240,7 @@ describe('readYouTubeTranscript', () => {
 
 	it('network errors and bad ids never throw', async () => {
 		const boom = (async () => { throw new Error('offline'); }) as typeof fetch;
-		expect(await readYouTubeTranscript(boom, 'abcdefghijk')).toEqual({ text: null, blocked: false });
+		expect(await readYouTubeTranscript(boom, 'abcdefghijk')).toEqual({ text: null, blocked: false, transient: true });
 		expect(await readYouTubeTranscript(boom, 'bad id!')).toEqual({ text: null, blocked: false });
 	});
 });

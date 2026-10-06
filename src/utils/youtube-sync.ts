@@ -39,6 +39,9 @@ export interface TranscriptRead {
 	text: string | null;
 	// YouTube answered 429 or "not a bot": no more transcript attempts this run.
 	blocked: boolean;
+	// The answer was not definite (timeout, network error, 5xx, 403, empty caption body): no more
+	// reads this run, and the finisher counts no attempt. Absent means a definite answer.
+	transient?: boolean;
 }
 
 export interface YoutubeDeps extends SyncDeps {
@@ -289,6 +292,9 @@ export function applyYoutubeConfig(state: SyncState, change: YoutubeConfigChange
 /** Pure: has the user chosen anything to read? */
 export const hasSource = (s: SyncState): boolean => !!s.youtube && (!!s.youtube.watchLater || !!s.youtube.playlistId);
 
+/** Pure: Watch later has never been read (its cursor is empty), so ticking it costs a first run. */
+export const watchLaterNeverRan = (s: SyncState): boolean => !s.youtube?.cursors?.wl?.started;
+
 /** The warning shown before the first run. */
 export function costWarning(count: number): string {
 	return `The first run saves up to ${count} videos, then up to ${ALARM_RUN_VIDEOS} per scheduled run until the rest of the list is in. Each one gets a summary from your OpenRouter key, and transcripts are long, so each costs more than an article.`;
@@ -314,8 +320,14 @@ async function fetchFirstPage(deps: SyncDeps, listId: string): Promise<PlaylistP
 	return page;
 }
 
-/** One continuation page. null when YouTube refused it (the caller keeps what it has). */
-async function fetchContinuation(deps: YoutubeDeps, cfg: YtCfg, token: string): Promise<YtPage | null> {
+// 'refused' is a definite no (a 4xx on the token); 'error' is not (5xx, bad body).
+type ContinuationFailure = 'refused' | 'error';
+
+// A restarted Load older walk stops here; the cursor is kept so the next tap continues.
+export const RESTART_MAX_PAGES = 30;
+
+/** One continuation page, or why there is none (the caller keeps what it has). */
+async function fetchContinuation(deps: YoutubeDeps, cfg: YtCfg, token: string): Promise<YtPage | ContinuationFailure> {
 	const auth = deps.authHeader ? await deps.authHeader().catch(() => null) : null;
 	const url = `${YT_BROWSE_URL}?${cfg.apiKey ? `key=${encodeURIComponent(cfg.apiKey)}&` : ''}prettyPrint=false`;
 	const res = await deps.fetchFn(url, {
@@ -333,11 +345,11 @@ async function fetchContinuation(deps: YoutubeDeps, cfg: YtCfg, token: string): 
 		}),
 	});
 	if (res.status === 429) throw new StopRun('rate-limited', 'YouTube asked us to slow down. Next run retries.');
-	if (!res.ok) return null;
+	if (!res.ok) return res.status >= 500 ? 'error' : 'refused';
 	try {
 		return parseContinuation(await res.json());
 	} catch {
-		return null;
+		return 'error';
 	}
 }
 
@@ -457,11 +469,11 @@ export async function runYoutubeSync(deps: YoutubeDeps, kind: YoutubeRunKind): P
 		while (token && pages < maxPages && (mode === 'new' || (mode === 'first' ? seen < FIRST_RUN_VIDEOS : added < FIRST_RUN_VIDEOS))) {
 			await deps.sleep(jitter(deps, 2000, 4000));
 			const next = await fetchContinuation(deps, page.cfg, token);
-			if (!next && mode === 'older' && pages === 0 && !restarted) {
-				// The stored token went stale: walk again from page 1. Known ids are skipped by take(),
-				// and the page cap is lifted so the walk can get past them to the first unread video.
+			if (next === 'refused' && mode === 'older' && pages === 0 && !restarted) {
+				// The stored token was refused: walk again from page 1. Known ids are skipped by take(),
+				// and the page cap is raised so the walk can get past them to the first unread video.
 				restarted = true;
-				maxPages = Infinity;
+				maxPages = RESTART_MAX_PAGES;
 				token = page.continuation;
 				cursor.older = token;
 				cursor.exhausted = !token;
@@ -469,9 +481,11 @@ export async function runYoutubeSync(deps: YoutubeDeps, kind: YoutubeRunKind): P
 				added += take(page.rows);
 				continue;
 			}
-			if (!next) {
+			if (typeof next === 'string') {
 				notes.push(mode === 'older'
-					? 'YouTube refused the next page, so Load older stopped there'
+					? next === 'error'
+						? 'YouTube had a problem on the next page, so Load older stopped there. Tap it again to retry'
+						: 'YouTube refused the next page, so Load older stopped there'
 					: `YouTube refused the next page, so only the first ${seen} videos of ${src.key === 'wl' ? 'Watch later' : 'the playlist'} were read`);
 				return;
 			}
@@ -483,6 +497,9 @@ export async function runYoutubeSync(deps: YoutubeDeps, kind: YoutubeRunKind): P
 			if (mode !== 'new') { cursor.older = token; cursor.exhausted = !token; }
 			// A page that brings nothing and no token ends the list.
 			if (!next.rows.length) break;
+		}
+		if (restarted && token && pages >= maxPages && added < FIRST_RUN_VIDEOS) {
+			notes.push(`Load older went through ${RESTART_MAX_PAGES} pages of videos already saved, so tap it again to continue`);
 		}
 		if (mode === 'older' && !token) { cursor.older = null; cursor.exhausted = true; }
 	};

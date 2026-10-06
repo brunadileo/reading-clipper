@@ -364,15 +364,36 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(third.retryLater).toBe(1);
 		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 3 });
 		const fourth = await runFinisher(deps, 'now');
-		expect(transcriptCalls).toHaveLength(1); // stuck: no more reads
-		expect(fourth.transcriptsStuck).toBe(1);
+		expect(transcriptCalls).toHaveLength(1); // no new read, only the mark is retried
+		expect(fourth.retryLater).toBe(1);
 	});
 
-	it('a stuck video does not take a slot from the items behind it', async () => {
-		const items = [video(1), ...Array.from({ length: AUTO_LIMIT }, (_, i) => item(i + 10))];
-		const { deps, provided } = setup({ items, state: { attempts: { v1: 3 } }, pages: () => ({ status: 200, html: full() }) });
-		await runFinisher(deps, 'alarm');
-		expect(provided).toHaveLength(AUTO_LIMIT);
+	it('a video already at 3 attempts gets its unreadable mark retried without a transcript read, even when reads are off', async () => {
+		const { deps, provided, store, transcriptCalls } = setup({
+			items: [video(1), video(2)],
+			state: { attempts: { v1: 3 } },
+			transcript: () => ({ text: null, blocked: true }),
+		});
+		const r = await runFinisher(deps, 'now');
+		expect(provided).toEqual([{ id: 'v1', outcome: 'unreadable' }]);
+		expect(transcriptCalls).toEqual(['vid00000002']);
+		expect(r.unreadable).toBe(1);
+		expect(store.data[FINISH_KEY].attempts).toEqual({});
+	});
+
+	it('a transient answer ends transcript reads for the run and costs no attempt', async () => {
+		const { deps, provided, store, transcriptCalls } = setup({
+			items: [video(1), video(2), item(3)],
+			state: { attempts: { v1: 2 } },
+			transcript: () => ({ text: null, blocked: false, transient: true }),
+			pages: () => ({ status: 200, html: full() }),
+		});
+		const r = await runFinisher(deps, 'now');
+		expect(transcriptCalls).toEqual(['vid00000001']);
+		expect(r.transcriptsBlocked).toBe(false);
+		expect(r.unreadable).toBe(0);
+		expect(store.data[FINISH_KEY].attempts).toEqual({ v1: 2 });
+		expect(provided).toEqual([{ id: 'i3', text: full() }]);
 	});
 
 	it('a blocked answer ends transcript reads for the run, costs no attempt, and articles still go', async () => {
@@ -388,10 +409,10 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(provided).toEqual([{ id: 'i3', text: full() }]);
 	});
 
-	it('a throwing reader counts an attempt; an item with no reader is left alone', async () => {
+	it('a throwing reader is not a definite answer and counts no attempt; an item with no reader is left alone', async () => {
 		const a = setup({ items: [video(1)], transcript: () => new Error('boom') });
 		await runFinisher(a.deps, 'now');
-		expect(a.store.data[FINISH_KEY].attempts).toEqual({ v1: 1 });
+		expect(a.store.data[FINISH_KEY].attempts).toEqual({});
 		const b = setup({ items: [video(1)], noTranscriptReader: true });
 		const r = await runFinisher(b.deps, 'now');
 		expect(b.store.data[FINISH_KEY].attempts).toEqual({});
