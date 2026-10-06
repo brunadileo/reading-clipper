@@ -12,10 +12,12 @@ import { runInstagramSync } from './instagram-sync';
 import { applyYoutubeConfig, checkPlaylist, extractPlaylistId, hasSource, runYoutubeSync, type YoutubeConfigChange, type YoutubeDeps } from './youtube-sync';
 import { readYouTubeTranscript } from './youtube-transcript';
 import { buildAuthorization } from './sapisid-hash';
+import { runMediumSync, type MediumRunResult } from './medium-sync';
+import { closeLeftoverMediumWindow, makeMediumDeps, releaseMediumOffscreen } from './medium-runner';
 import { finishSupported, ownPageSender, runFinish, trustedSender } from './waiting-runner';
 import { isEnabled, loadFinishState } from './waiting-finisher';
 import {
-	JOB_ORDER, intervalMinutes, isFrequency, loadSchedule, nextDueAt, runSequence, saveSchedule,
+	JOB_ORDER, intervalMinutes, isFrequency, loadSchedule, manualOnly, nextDueAt, runSequence, saveSchedule,
 	type SequenceTrigger, type SyncJob,
 } from './sync-schedule';
 
@@ -74,6 +76,8 @@ function makeYoutubeDeps(): YoutubeDeps {
 	};
 }
 
+const SYNC_SERVICES: SyncService[] = ['substack', 'instagram', 'youtube', 'medium'];
+
 const alarms = () => (typeof chrome !== 'undefined' ? (chrome as any).alarms : undefined);
 
 const sequenceDeps = {
@@ -89,10 +93,23 @@ const finishLine = (r: Awaited<ReturnType<typeof runFinish>>) =>
 		? `skipped (${r.skipped})`
 		: `${r.finished} finished, ${r.membersOnly} members only, ${r.unreadable} could not be opened${r.transcriptsBlocked ? ', YouTube slowed transcripts down' : ''}${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 
+async function runMedium(kind: 'manual' | 'older'): Promise<MediumRunResult> {
+	try {
+		return await runMediumSync(makeMediumDeps(makeDeps('medium')), kind);
+	} finally {
+		await releaseMediumOffscreen();
+	}
+}
+
+const mediumLine = (r: MediumRunResult) =>
+	r.stopped
+		? (r.message ?? `stopped (${r.stopped})`)
+		: `${r.sent} saved${r.linkOnly ? `, ${r.linkOnly} as links to finish` : ''}${r.message ? `. ${r.message}` : ''}`;
+
 /**
- * The jobs in their fixed order (JOB_ORDER): Substack, Instagram, finish
- * waiting, then YouTube (step 4, READ-38 choice 4). New jobs go after the
- * existing ones. Finish stays ahead of YouTube, so a video the server parked as
+ * The jobs in their fixed order (JOB_ORDER): Substack, Instagram, medium, finish
+ * waiting, then YouTube (READ-38 choice 4). Medium (READ-36) runs only from a
+ * button, never from the alarm, idle or startup. New jobs go after the existing ones. Finish stays ahead of YouTube, so a video the server parked as
  * "Waiting for transcript" is filled on the next run.
  */
 function buildJobs(manual: boolean): SyncJob[] {
@@ -120,6 +137,13 @@ function buildJobs(manual: boolean): SyncJob[] {
 				if (r.stopped) return r.message ?? `stopped (${r.stopped})`;
 				return `${r.sent} saved`;
 			},
+		},
+		{
+			id: 'medium',
+			name: 'Medium',
+			// Button-only (READ-36 choice 4): Sync now and the row's own Sync, never the timer.
+			enabled: manualOnly(manual, () => isOn('medium')),
+			run: async () => mediumLine(await runMedium('manual')),
 		},
 		{
 			id: 'finish',
@@ -180,7 +204,7 @@ export async function runAll(trigger: SequenceTrigger) {
 }
 
 /** Load older (one service) or the web's Finish now (the finish job only), under the same lock. */
-export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trigger: 'older' | 'finish-now' | 'finish-push') {
+export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'youtube', trigger: 'older' | 'finish-now' | 'finish-push' | 'now') {
 	const job = buildJobs(false).find((j) => j.id === id)!;
 	if (trigger === 'finish-now') {
 		// Works even with the finisher's own switch off, as Finish now always did.
@@ -194,6 +218,14 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trig
 			const r = await runSubstackSync(makeDeps('substack'), 'older');
 			return `${r.sent} saved, ${r.failed} could not be read${r.stopped ? `, stopped (${r.stopped})` : ''}`;
 		};
+	} else if (id === 'medium') {
+		// Load older, and the Medium row's own Sync: Medium alone, under the shared lock.
+		job.enabled = () => isOn('medium');
+		job.run = async () => mediumLine(await runMedium(trigger === 'older' ? 'older' : 'manual'));
+		// Then finish, in the same locked sequence, so the links just sent without
+		// text are filled right away (the global Sync now already does this).
+		const finish = buildJobs(true).find((j) => j.id === 'finish')!;
+		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
 	} else if (id === 'instagram') {
 		job.run = async () => {
 			const r = await runInstagramSync(makeDeps('instagram'), 'older');
@@ -214,6 +246,7 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'youtube', trig
 export function initSyncRunner(): void {
 	const api = alarms();
 	for (const name of OLD_ALARMS) void api?.clear(name);
+	void closeLeftoverMediumWindow();
 	void scheduleAlarm(false);
 	api?.onAlarm.addListener((alarm: { name: string }) => {
 		if (alarm.name === SYNC_ALARM) void runAll('alarm');
@@ -260,17 +293,21 @@ export function initSyncRunner(): void {
 				await scheduleAlarm(true);
 			})());
 		}
-		if (req.action === 'syncSetEnabled' && (req.service === 'substack' || req.service === 'instagram' || req.service === 'youtube')) {
+		if (req.action === 'syncSetEnabled' && SYNC_SERVICES.includes(req.service as SyncService)) {
 			if (!fromSettings) return undefined;
-			const service = req.service;
+			const service = req.service as SyncService;
 			return reply((async () => {
 				const state = await loadState(store, service);
 				state.enabled = !!req.enabled;
 				await saveState(store, service, state);
 			})());
 		}
-		if (req.action === 'syncRun' && req.kind === 'older' && (req.service === 'substack' || req.service === 'instagram' || req.service === 'youtube')) {
-			return fromSettings ? reply(runOne(req.service, 'older')) : undefined;
+		if (req.action === 'syncRun' && req.kind === 'older' && SYNC_SERVICES.includes(req.service as SyncService)) {
+			return fromSettings ? reply(runOne(req.service as SyncService, 'older')) : undefined;
+		}
+		// The Medium row's own Sync button: Medium alone, never from the timer.
+		if (req.action === 'syncRun' && req.kind === 'now' && req.service === 'medium') {
+			return fromSettings ? reply(runOne('medium', 'now')) : undefined;
 		}
 		// YouTube settings: check a pasted playlist (title or the reason it fails).
 		if (req.action === 'youtubeCheckPlaylist' && typeof req.input === 'string') {

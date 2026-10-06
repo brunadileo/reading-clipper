@@ -10,15 +10,15 @@ export interface ReadingCaptureBody {
 	title: string;
 	site_name: string;
 	text?: string;
-	// READ-37/39/38: where an automatic save came from. The server keeps only
-	// 'substack', 'instagram' and 'youtube'.
-	source?: 'substack' | 'instagram' | 'youtube';
+	// READ-37/39/38/36: where an automatic save came from. The server keeps only
+	// 'substack', 'instagram', 'youtube' and 'medium'.
+	source?: 'substack' | 'instagram' | 'youtube' | 'medium';
 	// READ-200: the channel, shown on the item page. The server keeps only the
 	// four values it allows a token client to name and stores 'token' otherwise.
 	via?: ReadingVia;
 }
 
-export type ReadingVia = 'chrome-clipper' | 'substack-saved' | 'instagram-saved';
+export type ReadingVia = 'chrome-clipper' | 'substack-saved' | 'instagram-saved' | 'medium-saved';
 
 export interface BuildReadingCaptureBodyParams {
 	url: string;
@@ -26,7 +26,7 @@ export interface BuildReadingCaptureBodyParams {
 	title: string;
 	siteName: string;
 	text: string;
-	source?: 'substack' | 'instagram' | 'youtube';
+	source?: 'substack' | 'instagram' | 'youtube' | 'medium';
 	via?: ReadingVia;
 }
 

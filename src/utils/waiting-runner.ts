@@ -24,7 +24,7 @@ export function finishSupported(): boolean {
 	return offscreenSupported();
 }
 
-function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 	let timer: ReturnType<typeof setTimeout>;
 	return Promise.race([
 		p,
@@ -57,7 +57,7 @@ async function askOffscreen(message: Record<string, unknown>): Promise<string> {
 }
 
 // --- primary method: worker fetch with the browser's own cookies ----------
-async function fetchPage(url: string) {
+export async function fetchPage(url: string) {
 	const res = await fetch(url, { credentials: 'include', redirect: 'follow', headers: { Accept: 'text/html,application/xhtml+xml' } });
 	const type = res.headers.get('content-type') || '';
 	let html = '';
@@ -69,7 +69,7 @@ async function fetchPage(url: string) {
 }
 
 // --- fallback B: minimized window, graveyard order (plan choice 13) -------
-async function waitForComplete(tabId: number): Promise<void> {
+export async function waitForComplete(tabId: number): Promise<void> {
 	const tab = await browser.tabs.get(tabId);
 	if (tab.status === 'complete') return;
 	await new Promise<void>((resolve) => {

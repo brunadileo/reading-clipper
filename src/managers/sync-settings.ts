@@ -7,6 +7,8 @@ import { setText } from '../utils/set-text';
 import { loadState, type SyncService, type SyncState } from '../utils/sync-core';
 import { creditWarning, IG_FIRST_RUN_POSTS } from '../utils/instagram-sync';
 import { costWarning, extractPlaylistId, FIRST_RUN_VIDEOS, hasSource, watchLaterNeverRan } from '../utils/youtube-sync';
+import { MEDIUM_RUN_POSTS } from '../utils/medium-sync';
+import { offscreenSupported } from '../utils/offscreen-doc';
 import { IS_STORE_BUILD } from '../utils/store-build';
 import { describeScheduleStatus, isFrequency, isRunning, loadSchedule } from '../utils/sync-schedule';
 
@@ -14,11 +16,14 @@ const ORIGINS: Record<SyncService, string[]> = {
 	substack: ['https://substack.com/*', 'https://*.substack.com/*'],
 	instagram: ['https://www.instagram.com/*', 'https://i.instagram.com/*'],
 	youtube: ['https://www.youtube.com/*'],
+	medium: ['https://medium.com/*', 'https://*.medium.com/*'],
 };
 // YouTube also needs the optional `cookies` permission (for the SAPISIDHASH header
 // of the paging call). It is asked in the same prompt as the site access.
+// Shown before the first run and before Load older (READ-36 choice 12).
+const MEDIUM_COST_WARNING = `Up to ${MEDIUM_RUN_POSTS} articles will each get a summary from your OpenRouter key.`;
 const PERMISSIONS: Partial<Record<SyncService, string[]>> = { youtube: ['cookies'] };
-const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram', youtube: 'YouTube' };
+const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram', youtube: 'YouTube', medium: 'Medium' };
 
 const store = {
 	async get(key: string) {
@@ -36,9 +41,14 @@ export function describeSyncStatus(service: SyncService, s: SyncState, now: numb
 	if (!s.enabled) return 'Off';
 	if (service === 'youtube' && !hasSource(s)) return 'Turned on. Choose Watch later or a playlist below.';
 	if (s.running && s.lastAttemptAt !== null && now - s.lastAttemptAt < 15 * 60 * 1000) return 'Syncing...';
-	if (s.signedOut) return `Sign in to ${name} in this browser, then press Sync now.`;
+	const press = service === 'medium' ? 'Sync' : 'Sync now';
+	if (s.signedOut) return `Sign in to ${name} in this browser, then press ${press}.`;
 	if (s.lastError) return `Last sync failed: ${s.lastError}`;
-	if (s.lastSuccess === null) return 'Turned on. Runs with the next sync, or press Sync now.';
+	if (s.lastSuccess === null) {
+		return service === 'medium'
+			? 'Turned on. It only runs when you press Sync here or Sync now above.'
+			: 'Turned on. Runs with the next sync, or press Sync now.';
+	}
 	const mins = Math.max(0, Math.round((now - s.lastSuccess) / 60000));
 	const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
 	return `Last synced ${ago}${s.lastResult ? ` (${s.lastResult})` : ''}`;
@@ -93,6 +103,11 @@ async function refresh(service: SyncService): Promise<void> {
 		}
 		older.hidden = !state.enabled;
 	}
+	const run = document.getElementById(`sync-${service}-run`) as HTMLButtonElement | null;
+	if (run) {
+		run.disabled = state.running;
+		run.hidden = !state.enabled;
+	}
 }
 
 function setupService(service: SyncService): void {
@@ -103,6 +118,11 @@ function setupService(service: SyncService): void {
 
 	toggle.addEventListener('change', () => {
 		const wantOn = toggle.checked;
+		// Medium: up to 100 summaries on the user's own key (READ-36 choice 12).
+		if (wantOn && service === 'medium' && !window.confirm(`${MEDIUM_COST_WARNING}\n\nTurn Medium on?`)) {
+			toggle.checked = false;
+			return;
+		}
 		// The first Instagram run is the costly one, and it now happens on the schedule.
 		if (wantOn && service === 'instagram') {
 			const warning = creditWarning(IG_FIRST_RUN_POSTS);
@@ -136,6 +156,7 @@ function setupService(service: SyncService): void {
 	});
 
 	older.addEventListener('click', async () => {
+		if (service === 'medium' && !window.confirm(`${MEDIUM_COST_WARNING}\n\nLoad older saves?`)) return;
 		if (service === 'instagram') {
 			const warning = creditWarning(IG_FIRST_RUN_POSTS);
 			if (warning && !window.confirm(`${warning}\n\nUp to ${IG_FIRST_RUN_POSTS} posts. Continue?`)) return;
@@ -158,6 +179,27 @@ function setupService(service: SyncService): void {
 	});
 
 	if (service === 'youtube') setupYoutubeExtras(status);
+	// Medium's own Sync button: Medium alone, button-only.
+	const run = document.getElementById(`sync-${service}-run`) as HTMLButtonElement | null;
+	run?.addEventListener('click', async () => {
+		if (!window.confirm(`${MEDIUM_COST_WARNING}\n\nSync Medium now?`)) return;
+		run.disabled = true;
+		if (status) status.textContent = 'Syncing...';
+		try {
+			const res: any = await browser.runtime.sendMessage({ action: 'syncRun', service, kind: 'now' });
+			if (res?.result?.skipped === 'busy') {
+				await refresh(service);
+				if (status) status.textContent = 'A sync is already running. Try again when it ends.';
+				return;
+			}
+			await refresh(service);
+			const line = res?.result?.ran?.[0]?.message;
+			if (line && status) status.textContent = line;
+		} catch (e) {
+			if (status) status.textContent = `Sync failed: ${e instanceof Error ? e.message : String(e)}`;
+		}
+	});
+
 	void refresh(service);
 }
 
@@ -275,7 +317,9 @@ function setupSchedule(): void {
 
 // Instagram sync is not in the first store listing (READ-48 choice 5): its row
 // is hidden and the finisher row takes the second number.
-const SERVICES: SyncService[] = IS_STORE_BUILD ? ['substack'] : ['substack', 'instagram', 'youtube'];
+// Medium (READ-36) is hidden there too, and on builds without the offscreen
+// document it needs to read articles (Firefox, Safari).
+const SERVICES: SyncService[] = IS_STORE_BUILD ? ['substack'] : ['substack', 'instagram', ...(offscreenSupported() ? (['medium'] as const) : []), 'youtube'];
 
 export function initializeSyncSettings(): void {
 	setupSchedule();
@@ -285,6 +329,13 @@ export function initializeSyncSettings(): void {
 		}
 		const num = document.getElementById('finish-num');
 		if (num) num.textContent = '2';
+	}
+	if (!SERVICES.includes('medium')) {
+		(document.querySelector('.sync-service[data-service="medium"]') as HTMLElement | null)?.style.setProperty('display', 'none');
+		const num = document.getElementById('finish-num');
+		if (num && !IS_STORE_BUILD) num.textContent = '3';
+		const ytNum = document.getElementById('youtube-num');
+		if (ytNum && !IS_STORE_BUILD) ytNum.textContent = '4';
 	}
 	SERVICES.forEach(setupService);
 	// Background runs change the saved state while this page is open.
