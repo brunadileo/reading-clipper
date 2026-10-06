@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { memoryStore } from './sync-test-helpers';
 import {
-	intervalMinutes, isDue, isOwnPageSender, isRunning, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
+	intervalMinutes, isDue, isOwnPageSender, isRunning, manualOnly, nextDueAt, loadSchedule, saveSchedule, runSequence, describeScheduleStatus,
 	JOB_ORDER, JOB_PAUSE_MS, PENDING_WAKE_KEY, SCHEDULE_KEY, markPendingWake, STALE_RUN_MS, FREQUENCY_LABELS, DEFAULT_FREQUENCY, type SyncJob, type SyncFrequency,
 } from './sync-schedule';
 
@@ -185,6 +185,50 @@ describe('four jobs with YouTube (READ-38)', () => {
 		expect((await runSequence(only, h.deps, 'alarm')).ran.map((r) => r.id)).toEqual(['youtube']);
 		// Inside the interval a scheduled trigger does nothing.
 		expect((await runSequence(only, h.deps, 'idle')).skipped).toBe('not-due');
+	});
+});
+
+describe('Medium job (button-only, READ-36)', () => {
+	// The order buildJobs uses: substack, instagram, medium, finish.
+	const jobs = (manual: boolean, log: string[], over: { mediumFails?: boolean; mediumOn?: boolean } = {}): SyncJob[] => [
+		job('substack', log),
+		job('instagram', log),
+		job('medium', log, { enabled: manualOnly(manual, async () => over.mediumOn ?? true), fail: over.mediumFails }),
+		job('finish', log),
+	];
+	it('an alarm, idle or startup run skips Medium', async () => {
+		for (const trig of ['alarm', 'idle', 'startup'] as const) {
+			const h = harness({ [SCHEDULE_KEY]: { frequency: 'hourly', lastRunAt: null } });
+			const log: string[] = [];
+			await runSequence(jobs(false, log), h.deps, trig);
+			expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:finish', 'end:finish']);
+		}
+	});
+	it('Sync now runs Medium after Instagram and before finish', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence(jobs(true, log), h.deps, 'now');
+		expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:medium', 'end:medium', 'start:finish', 'end:finish']);
+	});
+	it('a switch that is off keeps Medium out even on Sync now', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence(jobs(true, log, { mediumOn: false }), h.deps, 'now');
+		expect(log).not.toContain('start:medium');
+	});
+	it('a failing Medium job does not stop finish', async () => {
+		const h = harness();
+		const log: string[] = [];
+		const res = await runSequence(jobs(true, log, { mediumFails: true }), h.deps, 'now');
+		expect(log).toEqual(['start:substack', 'end:substack', 'start:instagram', 'end:instagram', 'start:medium', 'fail:medium', 'start:finish', 'end:finish']);
+		expect(res.ran.map((r) => r.ok)).toEqual([true, true, false, true]);
+	});
+	it('Load older and the row Sync run Medium alone and leave the schedule clock alone', async () => {
+		const h = harness();
+		const log: string[] = [];
+		await runSequence([job('medium', log)], h.deps, 'older', { recordRun: false });
+		expect(log).toEqual(['start:medium', 'end:medium']);
+		expect((await loadSchedule(h.store)).lastRunAt).toBeNull();
 	});
 });
 

@@ -24,7 +24,7 @@ export const STALE_RUN_MS = 15 * 60 * 1000;
 export const JOB_PAUSE_MS = 3000;
 export const SCHEDULE_KEY = 'sync:schedule';
 // The fixed order of the jobs (plan choice 26, READ-38 choice 4). New jobs go after existing ones.
-export const JOB_ORDER = ['substack', 'instagram', 'finish', 'youtube'] as const;
+export const JOB_ORDER = ['substack', 'instagram', 'medium', 'finish', 'youtube'] as const;
 
 const MINUTES: Record<Exclude<SyncFrequency, 'manual'>, number> = {
 	hourly: 60,
@@ -55,6 +55,13 @@ export function isDue(freq: SyncFrequency, lastRunAt: number | null, now: number
 	const due = nextDueAt(freq, lastRunAt, now);
 	return due !== null && now >= due;
 }
+
+/**
+ * A job that only runs from a button (READ-36 Medium): enabled when the run is
+ * manual (Sync now, the row's own Sync) and the service's switch is on. The
+ * alarm, idle and startup triggers never reach it.
+ */
+export const manualOnly = (manual: boolean, isOn: () => Promise<boolean>) => async (): Promise<boolean> => manual && (await isOn());
 
 export type SequenceTrigger = 'alarm' | 'startup' | 'idle' | 'now' | 'older' | 'finish-now' | 'finish-push';
 

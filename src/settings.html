@@ -96,8 +96,19 @@
 								</div>
 								<div class="checkbox-container"><input type="checkbox" id="sync-instagram-toggle" role="switch" aria-label="Instagram sync" /></div>
 							</div>
+							<div class="lrs-row sync-service" data-service="medium">
+								<span class="num">3</span>
+								<div class="main">
+									<div class="t">Medium <span class="lr-tag">Experimental</span></div>
+									<div class="d">Your Reading list and your own lists, read in your signed-in browser. Only when you press a button, never on the timer. Each article is read here and sent with its text. Medium has no official way to do this and its terms limit browser add-ons, so turn it on at your own risk.</div>
+									<div class="d" id="sync-medium-status" role="status">Off</div>
+									<button class="lrs-btn" id="sync-medium-run" type="button" hidden>Sync</button>
+									<button class="lrs-btn link" id="sync-medium-older" type="button" hidden>Load 100 older saves</button>
+								</div>
+								<div class="checkbox-container"><input type="checkbox" id="sync-medium-toggle" role="switch" aria-label="Medium sync" /></div>
+							</div>
 							<div class="lrs-row sync-service" data-service="finish">
-								<span class="num" id="finish-num">3</span>
+								<span class="num" id="finish-num">4</span>
 								<div class="main">
 									<div class="t">Finish waiting articles</div>
 									<div class="d">Reads paywalled saves with your own login, with nothing on screen. Runs last, so it also picks up what the steps above just saved. Chrome asks once for access to the sites you save from.</div>
