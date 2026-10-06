@@ -30,7 +30,7 @@ export interface SyncState {
 	youtube?: YoutubeConfig;
 	// Medium only (READ-36): per own list, how many items Load older has seen and
 	// whether the whole list is in. Medium has no single cursor.
-	lists?: Record<string, { seen: number; exhausted: boolean }>;
+	lists?: Record<string, { seen: number; exhausted: boolean; stalls?: number }>;
 	// 'signed-out' is a state, not an error: the settings page words it softly.
 	lastError: string | null;
 	signedOut: boolean;

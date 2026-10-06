@@ -28,6 +28,7 @@ export const MEDIUM_RUN_POSTS = 100;
 export const MEDIUM_STOP_AFTER_KNOWN = 3;
 export const MEDIUM_MAX_CONSECUTIVE_FAILURES = 5;
 export const MEDIUM_PAGE_SIZE = 20;
+export const MEDIUM_MAX_STALLS = 2;
 export const MEDIUM_SIGNED_OUT = 'Sign in to Medium in this browser';
 export const MEDIUM_RATE_LIMITED = 'Medium asked us to slow down. Try again later.';
 
@@ -141,6 +142,13 @@ export function parseLibrary(state: Record<string, any> | null): MediumLibrary |
 		lists.push({ catalogId: c.id, postItemsCount: Number.isFinite(count) ? count : 0, predefined });
 	}
 	return { viewerId, username, tier, lists };
+}
+
+/** A member: any non-empty tier except a free/none value (MEMBER, FRIEND_OF_MEDIUM and any paid tier), case-insensitive. */
+export function isMemberTier(tier: string | null): boolean {
+	if (typeof tier !== 'string') return false;
+	const t = tier.trim().toUpperCase();
+	return t !== '' && !/^(NONE|FREE|NON[_ -]?MEMBER|NOT[_ -]?MEMBER)$/.test(t);
 }
 
 /** Added-at time in ms from a 24-hex catalogItemId (the first 8 hex are seconds), or null. */
@@ -277,7 +285,7 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 		const firstPageCount: Record<string, number> = {};
 		// Whether the scan of a list's first page reached its end (a break at 3 known leaves items unseen).
 		const scanComplete: Record<string, boolean> = {};
-		const lockedIds = new Set<string>();
+		const unlockedIds = new Set<string>();
 		let listIndex = 0;
 		for (const list of lib.lists) {
 			if (list.postItemsCount <= 0) { cursors[list.catalogId] = { seen: 0, exhausted: true }; continue; }
@@ -291,7 +299,7 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 			scanComplete[list.catalogId] = true;
 			for (const it of page.items) {
 				const id = `md:${it.postId}`;
-				if (it.locked) lockedIds.add(id);
+				if (!it.locked) unlockedIds.add(id);
 				if (known.has(id) || failedOut(id)) {
 					knownRun++;
 					// Later syncs stop scanning a list after 3 known in a row (newest first).
@@ -314,7 +322,7 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 		}
 
 		// 4. Load older: past the first page, let Medium's own JS page the list in a minimized window.
-		const deepUpdates: Record<string, { seen: number; exhausted: boolean }> = {};
+		const deepUpdates: Record<string, { seen: number; exhausted: boolean; stalls: number }> = {};
 		if (isOlder) {
 			let remaining = MEDIUM_RUN_POSTS - batch.length;
 			for (const list of lib.lists) {
@@ -344,7 +352,9 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 				// A stalled scroll (a minimized window throttles the page) is not the end of the list.
 				const finished = got.ended && got.total >= list.postItemsCount;
 				if (got.ended && !finished) result.message = 'Medium stopped loading a list before the end. Press Load older again to continue.';
-				deepUpdates[list.catalogId] = { seen: Math.max(cur.seen, got.total), exhausted: finished };
+				// Two passes in a row with nothing new: the count includes posts the page never shows.
+				const stalls = added > 0 || finished ? 0 : (cur.stalls ?? 0) + 1;
+				deepUpdates[list.catalogId] = { seen: Math.max(cur.seen, got.total), exhausted: finished || stalls >= MEDIUM_MAX_STALLS, stalls };
 			}
 		}
 
@@ -358,8 +368,8 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 			firstSend = false;
 			let text: string | undefined;
 			try {
-				// Only Medium's own pages are read; a member-only story is not read without membership.
-				if (!isMediumPostUrl(post.url) || (lockedIds.has(post.id) && lib.tier !== 'MEMBER')) throw new SkipText();
+				// Only Medium's own pages are read; without a member tier only posts seen as unlocked on a list page are read.
+				if (!isMediumPostUrl(post.url) || (!isMemberTier(lib.tier) && !unlockedIds.has(post.id))) throw new SkipText();
 				const page = await deps.fetchPage(post.url);
 				if (page.status === 429) throw new StopRun('rate-limited', MEDIUM_RATE_LIMITED);
 				if (page.status === 401 || page.status === 403 || /<title>\s*just a moment/i.test(page.html)) throw new StopRun('signed-out', MEDIUM_SIGNED_OUT);
@@ -401,7 +411,7 @@ export async function runMediumSync(deps: MediumDeps, kind: MediumRunKind): Prom
 			const deep = deepUpdates[list.catalogId];
 			// A list the first page covers is judged fresh every run; a deeper list keeps what Load older proved.
 			cursors[list.catalogId] = deep
-				? { seen: Math.max(deep.seen, first), exhausted: deep.exhausted || prev.exhausted }
+				? { seen: Math.max(deep.seen, first), exhausted: deep.exhausted || prev.exhausted, stalls: deep.stalls }
 				: { seen: Math.max(prev.seen, first), exhausted: firstPageOnly ? covered : prev.exhausted };
 		}
 		state.lists = cursors;

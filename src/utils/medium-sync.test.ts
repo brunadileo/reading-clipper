@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-	addedAtFromCatalogItemId, extractApolloState, listUrl, parseLibrary, parseListPage, runMediumSync,
+	addedAtFromCatalogItemId, extractApolloState, isMemberTier, listUrl, parseLibrary, parseListPage, runMediumSync,
 	MEDIUM_RUN_POSTS, type MediumCollected, type MediumDeps,
 } from './medium-sync';
 import { checkFullText } from './full-text-check';
@@ -53,6 +53,13 @@ describe('parseLibrary', () => {
 	it('listUrl uses reading-list for the predefined list', () => {
 		expect(listUrl(USERNAME, { catalogId: READING, postItemsCount: 1, predefined: true })).toBe(`https://medium.com/@${USERNAME}/list/reading-list`);
 		expect(listUrl(USERNAME, { catalogId: OWN, postItemsCount: 1, predefined: false })).toBe(`https://medium.com/@${USERNAME}/list/${OWN}`);
+	});
+});
+
+describe('isMemberTier', () => {
+	it('any non-empty tier except a free/none value is a member, in any case', () => {
+		for (const t of ['MEMBER', 'member', 'FRIEND_OF_MEDIUM']) expect(isMemberTier(t)).toBe(true);
+		for (const t of ['NONE', 'none', 'FREE', '', '  ', null]) expect(isMemberTier(t as any)).toBe(false);
 	});
 });
 
@@ -220,7 +227,7 @@ describe('runMediumSync', () => {
 			const first = setup(w);
 			await runMediumSync(first.deps, 'manual');
 			let st = first.store.data['sync:medium'];
-			expect(st.lists[READING]).toEqual({ seen: 20, exhausted: false });
+			expect(st.lists[READING]).toMatchObject({ seen: 20, exhausted: false });
 			expect(st.olderExhausted).toBe(false);
 
 			const second = setup(w, { store: first.store, collect: async () => collected() });
@@ -234,7 +241,7 @@ describe('runMediumSync', () => {
 			expect(r.sent).toBe(25);
 			expect(second.sent[0].url).toBe(`https://medium.com/@someauthor/deep-0-${postIdOf(1, 20)}`);
 			st = second.store.data['sync:medium'];
-			expect(st.lists[READING]).toEqual({ seen: 45, exhausted: true });
+			expect(st.lists[READING]).toMatchObject({ seen: 45, exhausted: true });
 			expect(st.olderExhausted).toBe(true);
 
 			const third = setup(w, { store: second.store });
@@ -249,7 +256,7 @@ describe('runMediumSync', () => {
 			const more = setup(w, { store: first.store, collect: async () => ({ ...collected(), total: 30, ended: false }) });
 			await runMediumSync(more.deps, 'older');
 			const st = more.store.data['sync:medium'];
-			expect(st.lists[READING]).toEqual({ seen: 30, exhausted: false });
+			expect(st.lists[READING]).toMatchObject({ seen: 30, exhausted: false });
 			expect(st.olderExhausted).toBe(false);
 		});
 
@@ -259,7 +266,7 @@ describe('runMediumSync', () => {
 			const blocked = setup(w, { store: first.store, collect: async () => ({ posts: [], total: 0, ended: true, blocked: true }) });
 			const r = await runMediumSync(blocked.deps, 'older');
 			expect(r.stopped).toBe('signed-out');
-			expect(blocked.store.data['sync:medium'].lists[READING]).toEqual({ seen: 20, exhausted: false });
+			expect(blocked.store.data['sync:medium'].lists[READING]).toMatchObject({ seen: 20, exhausted: false });
 		});
 
 		it('a stalled scroll below the list count is not the end and says so', async () => {
@@ -270,7 +277,7 @@ describe('runMediumSync', () => {
 			expect(r.stopped).toBeNull();
 			expect(r.message).toMatch(/stopped loading/);
 			const st = stall.store.data['sync:medium'];
-			expect(st.lists[READING]).toEqual({ seen: 30, exhausted: false });
+			expect(st.lists[READING]).toMatchObject({ seen: 30, exhausted: false });
 			expect(st.olderExhausted).toBe(false);
 		});
 
@@ -283,7 +290,7 @@ describe('runMediumSync', () => {
 			expect(r.message).toMatch(/Could not read a list page/);
 			const st = run.store.data['sync:medium'];
 			expect(st.pending).toEqual([]);
-			expect(st.lists[READING]).toEqual({ seen: 20, exhausted: false });
+			expect(st.lists[READING]).toMatchObject({ seen: 20, exhausted: false });
 		});
 
 		it('a post link off Medium is never fetched, only sent as a link', async () => {
@@ -297,6 +304,34 @@ describe('runMediumSync', () => {
 			expect(off.fetched).toEqual([]);
 			expect(off.sent).toHaveLength(1);
 			expect(off.sent[0].text).toBeUndefined();
+		});
+
+		it('a locked post found by scrolling is link-only with no fetch for a non-member, fetched for a member', async () => {
+			const first = setup({ ...w, tier: 'NONE' });
+			await runMediumSync(first.deps, 'manual');
+			const collect = async () => collected();
+			const non = setup({ ...w, tier: 'NONE' }, { store: first.store, collect });
+			await runMediumSync(non.deps, 'older');
+			expect(non.sent).toHaveLength(25);
+			expect(non.fetched).toEqual([]);
+			expect(non.sent.every((x) => x.text === undefined)).toBe(true);
+			const f2 = setup(w);
+			await runMediumSync(f2.deps, 'manual');
+			const mem = setup(w, { store: f2.store, collect });
+			await runMediumSync(mem.deps, 'older');
+			expect(mem.fetched).toHaveLength(25);
+		});
+
+		it('two Load older passes with nothing new for a list end it as exhausted', async () => {
+			const first = setup(w);
+			await runMediumSync(first.deps, 'manual');
+			const stall = () => setup(w, { store: first.store, collect: async () => ({ posts: [], total: 30, ended: true }) });
+			await runMediumSync(stall().deps, 'older');
+			expect(first.store.data['sync:medium'].lists[READING]).toMatchObject({ exhausted: false, stalls: 1 });
+			await runMediumSync(stall().deps, 'older');
+			const st = first.store.data['sync:medium'];
+			expect(st.lists[READING].exhausted).toBe(true);
+			expect(st.olderExhausted).toBe(true);
 		});
 
 		it('never opens the page for a list the first page already covers', async () => {
@@ -325,7 +360,7 @@ describe('runMediumSync', () => {
 			expect(store.data['sync:medium'].knownIds).toEqual([`md:${postIdOf(1, 0)}`]);
 		});
 		it('a member-only story without membership is sent as a link alone even if the page looks long', async () => {
-			const { deps, sent, fetched } = setup({ ...one, tier: 'REGULAR', locked: true }, { articles: () => postHtml(words(300)) });
+			const { deps, sent, fetched } = setup({ ...one, tier: 'NONE', locked: true }, { articles: () => postHtml(words(300)) });
 			await runMediumSync(deps, 'manual');
 			expect(fetched).toEqual([]);
 			expect(sent[0].text).toBeUndefined();
