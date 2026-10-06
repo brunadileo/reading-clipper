@@ -14,11 +14,12 @@ const ORIGINS: Record<SyncService, string[]> = {
 	substack: ['https://substack.com/*', 'https://*.substack.com/*'],
 	instagram: ['https://www.instagram.com/*', 'https://i.instagram.com/*'],
 	youtube: ['https://www.youtube.com/*'],
+	medium: ['https://medium.com/*', 'https://*.medium.com/*'],
 };
 // YouTube also needs the optional `cookies` permission (for the SAPISIDHASH header
 // of the paging call). It is asked in the same prompt as the site access.
 const PERMISSIONS: Partial<Record<SyncService, string[]>> = { youtube: ['cookies'] };
-const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram', youtube: 'YouTube' };
+const NAMES: Record<SyncService, string> = { substack: 'Substack', instagram: 'Instagram', youtube: 'YouTube', medium: 'Medium' };
 
 const store = {
 	async get(key: string) {
