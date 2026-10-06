@@ -17,7 +17,7 @@
 //   POST https://www.youtube.com/youtubei/v1/browse {context: WEB client, continuation}
 //     -> rows and the next continuationItemRenderer, nested anywhere in the tree.
 import {
-	MAX_ATTEMPTS, jitter, loadState, saveState,
+	MAX_ATTEMPTS, jitter, loadState, saveState, sendWithRetry,
 	type SyncDeps, type SyncPost, type SyncState, type YoutubeConfig, type YoutubeCursor,
 } from './sync-core';
 
@@ -534,7 +534,7 @@ export async function runYoutubeSync(deps: YoutubeDeps, kind: YoutubeRunKind): P
 					// A transcript failure never blocks the save.
 				}
 			}
-			const sent = await deps.send(post, text);
+			const sent = await sendWithRetry(deps, post, text);
 			if (sent.status === 401) throw new StopRun('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
 			if (sent.status === 429 || (sent.status ?? 0) >= 500 || (!sent.ok && sent.status === undefined)) {
 				throw new StopRun('error', sent.error || 'Lazy Reader could not be reached. Next run retries.');

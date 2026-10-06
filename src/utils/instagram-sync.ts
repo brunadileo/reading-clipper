@@ -11,7 +11,7 @@
 //          next_max_id, more_available }
 //   GET https://www.instagram.com/accounts/edit/ (HTML) contains
 //     "username":"<name>" and "csrf_token":"<token>" when signed in.
-import { loadState, saveState, type SyncDeps, type SyncPost } from './sync-core';
+import { loadState, saveState, sendWithRetry, type SyncDeps, type SyncPost } from './sync-core';
 
 export const IG_LIST_URL = 'https://www.instagram.com/api/v1/feed/saved/posts/';
 export const IG_ACCOUNT_URL = 'https://www.instagram.com/accounts/edit/';
@@ -167,7 +167,7 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 		for (const post of found) {
 			if (!first2) await deps.sleep(IG_SEND_GAP_MS);
 			first2 = false;
-			const sent = await deps.send(post, undefined);
+			const sent = await sendWithRetry(deps, post, undefined);
 			if (sent.status === 401) return await finish('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
 			if (!sent.ok) return await finish('error', sent.error || `Lazy Reader answered ${sent.status ?? 'nothing'}`);
 			out.sent++;

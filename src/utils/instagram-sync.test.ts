@@ -140,4 +140,13 @@ describe('runInstagramSync', () => {
 		const r = await runInstagramSync(deps, 'sync');
 		expect(r.stopped).toBe('token');
 	});
+
+	it('a 520 from Lazy Reader is retried and the post goes through', async () => {
+		const { deps, sent, sleeps } = makeDeps({ route: igRoute(1), store: enabled(), sends: [{ ok: false, status: 520 }, { ok: true, status: 200 }] });
+		const r = await runInstagramSync(deps, 'sync');
+		expect(r.stopped).toBeNull();
+		expect(r.sent).toBe(1);
+		expect(sent).toHaveLength(2);
+		expect(sleeps).toContain(3000);
+	});
 });

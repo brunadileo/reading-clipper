@@ -105,6 +105,27 @@ export interface SendResult {
 
 export type SendFn = (post: SyncPost, text: string | undefined) => Promise<SendResult>;
 
+/** Waits before the 1st and 2nd retry of a send that got a gateway or network error. */
+export const SEND_RETRY_DELAYS_MS = [3000, 10000];
+
+/** A transient failure worth retrying: no answer at all, or a 5xx (520 to 524 are gateway pages). */
+export const isTransientSend = (r: SendResult) => !r.ok && (r.status === undefined || (r.status >= 500 && r.status <= 599));
+
+/**
+ * deps.send, retried twice (3 s, then 10 s) on a network error or a 5xx. Safe
+ * because capture dedupes by URL. Any other answer, 401 and 4xx included, comes
+ * back at once for the caller's own rules.
+ */
+export async function sendWithRetry(deps: SyncDeps, post: SyncPost, text: string | undefined): Promise<SendResult> {
+	let res = await deps.send(post, text);
+	for (const wait of SEND_RETRY_DELAYS_MS) {
+		if (!isTransientSend(res)) return res;
+		await deps.sleep(wait);
+		res = await deps.send(post, text);
+	}
+	return res;
+}
+
 export interface SyncDeps {
 	store: SyncStore;
 	fetchFn: typeof fetch;

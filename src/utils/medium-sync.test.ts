@@ -450,6 +450,59 @@ describe('runMediumSync', () => {
 			expect(a.store.data['sync:medium'].pending).toEqual([]);
 		});
 
+		describe('Lazy Reader 5xx (live bug: 520 from the gateway)', () => {
+			const one: World = { lists: [{ no: 1, id: READING, predefined: true, count: 1 }] };
+			const e520 = { ok: false, status: 520, error: 'Request failed with status 520' };
+
+			it('retries the same send after 3 s and 10 s, then goes on', async () => {
+				const { deps, sent, sleeps } = setup(one, { sends: [e520, e520, { ok: true, status: 200 }] });
+				const r = await runMediumSync(deps, 'manual');
+				expect(r.stopped).toBeNull();
+				expect(r.sent).toBe(1);
+				expect(sent).toHaveLength(3);
+				expect(sent.every((x) => x.id === sent[0].id)).toBe(true);
+				expect(sleeps.slice(-2)).toEqual([3000, 10000]);
+			});
+
+			it('a network error is retried too', async () => {
+				const { deps, sent } = setup(one, { sends: [{ ok: false, error: 'Failed to fetch' }, { ok: true, status: 200 }] });
+				expect((await runMediumSync(deps, 'manual')).sent).toBe(1);
+				expect(sent).toHaveLength(2);
+			});
+
+			it('still failing after two retries stops with a plain message, keeps pending, and the next Sync continues', async () => {
+				const a = setup({ lists: many(2) }, { sends: [...Array(4).fill({ ok: true, status: 200 }), e520, e520, e520] });
+				const r = await runMediumSync(a.deps, 'manual');
+				expect(r.stopped).toBe('error');
+				expect(r.message).toBe('Lazy Reader did not answer (status 520). Press Sync to continue.');
+				expect(r.sent).toBe(4);
+				expect(a.sent).toHaveLength(7); // 4 saved, then the 5th post tried 3 times
+				const st = a.store.data['sync:medium'];
+				expect(st.running).toBe(false);
+				expect(st.knownIds).toHaveLength(4);
+				expect(st.pending).toHaveLength(36);
+				expect(st.lastError).toBe(r.message);
+				const b = setup({ lists: many(2) }, { store: a.store });
+				const r2 = await runMediumSync(b.deps, 'manual');
+				expect(r2.sent).toBe(36);
+				expect(b.store.data['sync:medium'].pending).toEqual([]);
+			});
+
+			it('a 4xx other than 401 and 429 is one failed post, not a stop, and is not retried', async () => {
+				const { deps, sent } = setup(one, { sends: [{ ok: false, status: 400 }] });
+				const r = await runMediumSync(deps, 'manual');
+				expect(r.stopped).toBeNull();
+				expect(r.failed).toBe(1);
+				expect(sent).toHaveLength(1);
+			});
+
+			it('401 is not retried', async () => {
+				const { deps, sent } = setup(one, { sends: [{ ok: false, status: 401 }] });
+				expect((await runMediumSync(deps, 'manual')).stopped).toBe('token');
+				expect(sent).toHaveLength(1);
+			});
+		});
+
 		it('401 from Lazy Reader stops with the token message', async () => {
 			const { deps } = setup({ lists: many(2) }, { sends: [{ ok: false, status: 401 }] });
 			const r = await runMediumSync(deps, 'manual');
