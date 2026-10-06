@@ -1,0 +1,375 @@
+{
+  "wireMagic": "pb3",
+  "pens": [
+    {}
+  ],
+  "wsWinStyles": [
+    {}
+  ],
+  "wpWinPositions": [
+    {}
+  ],
+  "events": [
+    {
+      "tStartMs": 80,
+      "dDurationMs": 1440,
+      "segs": [
+        {
+          "utf8": "Hey, it's Mark."
+        }
+      ]
+    },
+    {
+      "tStartMs": 1520,
+      "dDurationMs": 4800,
+      "segs": [
+        {
+          "utf8": "Now, I don't usually do a lot of\u00a0\nprogramming related content on this channel,\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 6320,
+      "dDurationMs": 5600,
+      "segs": [
+        {
+          "utf8": "despite the fact that programming is of course\u00a0\nAn essential part of any game maker's toolkit."
+        }
+      ]
+    },
+    {
+      "tStartMs": 11920,
+      "dDurationMs": 4720,
+      "segs": [
+        {
+          "utf8": "But that's just because I am far\u00a0\nfrom an expert on this subject."
+        }
+      ]
+    },
+    {
+      "tStartMs": 16640,
+      "dDurationMs": 3200,
+      "segs": [
+        {
+          "utf8": "I mean, the code bases for my two video games,\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 19840,
+      "dDurationMs": 4400,
+      "segs": [
+        {
+          "utf8": "Mind Over Magnet and Word Play,\u00a0\nare basically held together"
+        }
+      ]
+    },
+    {
+      "tStartMs": 24240,
+      "dDurationMs": 2640,
+      "segs": [
+        {
+          "utf8": "with sticks and the glue."
+        }
+      ]
+    },
+    {
+      "tStartMs": 26880,
+      "dDurationMs": 5200,
+      "segs": [
+        {
+          "utf8": "But there is one aspect of Word Play's\u00a0\nprogramming that I'm actually really\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 32080,
+      "dDurationMs": 4720,
+      "segs": [
+        {
+          "utf8": "proud of, and that's the way I\u00a0\nimplemented the game's modifiers."
+        }
+      ]
+    },
+    {
+      "tStartMs": 36800,
+      "dDurationMs": 1520,
+      "segs": [
+        {
+          "utf8": "So - for context."
+        }
+      ]
+    },
+    {
+      "tStartMs": 38320,
+      "dDurationMs": 5440,
+      "segs": [
+        {
+          "utf8": "Word Play is a vocabulary roguelike\u00a0\nwhere you spell words to score points."
+        }
+      ]
+    },
+    {
+      "tStartMs": 43760,
+      "dDurationMs": 4400,
+      "segs": [
+        {
+          "utf8": "And then you can unlock perks that let\u00a0\nyou bend the rules and score even bigger."
+        }
+      ]
+    },
+    {
+      "tStartMs": 48160,
+      "dDurationMs": 3120,
+      "segs": [
+        {
+          "utf8": "These perks come in three flavours."
+        }
+      ]
+    },
+    {
+      "tStartMs": 51280,
+      "dDurationMs": 3520,
+      "segs": [
+        {
+          "utf8": "Gifts typically add more letters to your bag."
+        }
+      ]
+    },
+    {
+      "tStartMs": 54800,
+      "dDurationMs": 3200,
+      "segs": [
+        {
+          "utf8": "Upgrades let you change and improve your tiles."
+        }
+      ]
+    },
+    {
+      "tStartMs": 58000,
+      "dDurationMs": 5680,
+      "segs": [
+        {
+          "utf8": "And modifiers are the passive perks that\u00a0\ngive big benefits under the right conditions."
+        }
+      ]
+    },
+    {
+      "tStartMs": 63680,
+      "dDurationMs": 6960,
+      "segs": [
+        {
+          "utf8": "Like... this one that multiplies your score\u00a0\nby 1.5 if the first letter is a vowel."
+        }
+      ]
+    },
+    {
+      "tStartMs": 70640,
+      "dDurationMs": 6240,
+      "segs": [
+        {
+          "utf8": "So they're basically the relics from Slay\u00a0\nthe Spire or the Jokers from Balatro."
+        }
+      ]
+    },
+    {
+      "tStartMs": 76880,
+      "dDurationMs": 7120,
+      "segs": [
+        {
+          "utf8": "Now when I first started making the game I had\u00a0\nno idea how I would implement these modifiers."
+        }
+      ]
+    },
+    {
+      "tStartMs": 84000,
+      "dDurationMs": 3600,
+      "segs": [
+        {
+          "utf8": "There wasn't an obvious and easy way to do it."
+        }
+      ]
+    },
+    {
+      "tStartMs": 87600,
+      "dDurationMs": 4880,
+      "segs": [
+        {
+          "utf8": "But, ultimately, I came up with a\u00a0\nsystem that I'm really happy with."
+        }
+      ]
+    },
+    {
+      "tStartMs": 92480,
+      "dDurationMs": 7360,
+      "segs": [
+        {
+          "utf8": "One that fits the requirements for the system,\u00a0\ncan be easily scaled to fit all 120 modifiers\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 99840,
+      "dDurationMs": 6400,
+      "segs": [
+        {
+          "utf8": "in the game, and makes it effortless to\u00a0\ntest, change, and debug the lot of them."
+        }
+      ]
+    },
+    {
+      "tStartMs": 106240,
+      "dDurationMs": 7600,
+      "segs": [
+        {
+          "utf8": "So I'm hoping this might prove interesting\u00a0\nor helpful or inspirational to, let's say,\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 113840,
+      "dDurationMs": 4000,
+      "segs": [
+        {
+          "utf8": "a beginner or intermediate level programmer."
+        }
+      ]
+    },
+    {
+      "tStartMs": 117840,
+      "dDurationMs": 5760,
+      "segs": [
+        {
+          "utf8": "to see what it takes to implement\u00a0\na somewhat complex system into\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 123600,
+      "dDurationMs": 4480,
+      "segs": [
+        {
+          "utf8": "a real life video game that's\u00a0\ncurrently available on Steam."
+        }
+      ]
+    },
+    {
+      "tStartMs": 128080,
+      "dDurationMs": 4080,
+      "segs": [
+        {
+          "utf8": "If that sounds good, then let's jump in."
+        }
+      ]
+    },
+    {
+      "tStartMs": 132160,
+      "dDurationMs": 3680,
+      "segs": [
+        {
+          "utf8": "A quick note that I'll be talking\u00a0\nabout it in the context of making\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 135840,
+      "dDurationMs": 3920,
+      "segs": [
+        {
+          "utf8": "the game in Unity, because that's what I used."
+        }
+      ]
+    },
+    {
+      "tStartMs": 139760,
+      "dDurationMs": 3840,
+      "segs": [
+        {
+          "utf8": "But the basic idea should apply\u00a0\nto pretty much any engine."
+        }
+      ]
+    },
+    {
+      "tStartMs": 143600,
+      "dDurationMs": 6480,
+      "segs": [
+        {
+          "utf8": "So the modifiers in Word Play touch\u00a0\nso many aspects of the game, with modifiers\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 150080,
+      "dDurationMs": 8640,
+      "segs": [
+        {
+          "utf8": "that fiddle with refreshes and bonus rounds and\u00a0\nspecial tiles and the basic rules of spelling."
+        }
+      ]
+    },
+    {
+      "tStartMs": 158720,
+      "dDurationMs": 2800,
+      "segs": [
+        {
+          "utf8": "And I'll come to that - but for now,\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 161520,
+      "dDurationMs": 5440,
+      "segs": [
+        {
+          "utf8": "let's make things simple by looking at the\u00a0\nones that impact the way your word is scored."
+        }
+      ]
+    },
+    {
+      "tStartMs": 166960,
+      "dDurationMs": 2800,
+      "segs": [
+        {
+          "utf8": "Like - that modifier I showed earlier:\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 169760,
+      "dDurationMs": 5440,
+      "segs": [
+        {
+          "utf8": "\"If the first letter is a Vowel,\u00a0\nmultiply the Final Score by 1.5\"."
+        }
+      ]
+    },
+    {
+      "tStartMs": 175200,
+      "dDurationMs": 2640,
+      "segs": [
+        {
+          "utf8": "How would we implement that?"
+        }
+      ]
+    },
+    {
+      "tStartMs": 177840,
+      "dDurationMs": 3360,
+      "segs": [
+        {
+          "utf8": "Well, first I'll write some code to tally up the\u00a0\u00a0"
+        }
+      ]
+    },
+    {
+      "tStartMs": 181200,
+      "dDurationMs": 4960,
+      "segs": [
+        {
+          "utf8": "word's initial score by adding up the\u00a0\npoints on all of the submitted tiles."
+        }
+      ]
+    }
+  ],
+  "_source": "Real caption text (json3) for the manual en track of the same real item, trimmed to the first 40 events for READ-19 task A7."
+}
