@@ -49,11 +49,11 @@ const c = () => chrome as any;
 // in a run, let go when the run ends; it closes only when nobody else uses it.
 const OFFSCREEN_HOLDER = 'finish';
 
-async function askOffscreen(message: Record<string, unknown>): Promise<string> {
+async function askOffscreen(message: Record<string, unknown>): Promise<{ text: string; title: string }> {
 	await ensureOffscreen(OFFSCREEN_HOLDER);
 	const res: any = await withTimeout(c().runtime.sendMessage({ target: 'offscreen', ...message }), EXTRACT_CAP_MS, 'Offscreen extraction');
 	if (!res?.ok) throw new Error(res?.error || 'Offscreen extraction failed');
-	return String(res.text || '');
+	return { text: String(res.text || ''), title: String(res.title || '') };
 }
 
 // --- primary method: worker fetch with the browser's own cookies ----------
@@ -110,7 +110,7 @@ async function closeLeftoverWindow(): Promise<void> {
 	} catch { /* nothing to close */ }
 }
 
-async function openForExtraction(url: string): Promise<string | null> {
+async function openForExtraction(url: string): Promise<{ text: string; title: string } | null> {
 	let windowId: number | undefined;
 	try {
 		const win = await browser.windows.create({ url, focused: false, state: 'normal' });
@@ -128,7 +128,8 @@ async function openForExtraction(url: string): Promise<string | null> {
 		await new Promise((r) => setTimeout(r, 1000));
 		const page = await withTimeout(extractFromTab(tabId), EXTRACT_CAP_MS, 'Page extraction');
 		if (!page || !page.content) return null;
-		return await askOffscreen({ action: 'contentToMarkdown', html: page.content, url: tab.url || url });
+		const md = await askOffscreen({ action: 'contentToMarkdown', html: page.content, url: tab.url || url });
+		return { text: md.text, title: tab.title || '' };
 	} finally {
 		if (windowId !== undefined) await closeWindow(windowId);
 	}

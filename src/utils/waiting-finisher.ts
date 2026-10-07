@@ -85,9 +85,10 @@ export interface FinisherDeps {
 	// Service-worker fetch with credentials 'include'. Throws on network failure.
 	fetchPage: (url: string) => Promise<FetchedPage>;
 	// HTML to article text (Defuddle in the offscreen document).
-	extractHtml: (html: string, url: string) => Promise<string>;
-	// Fallback B (minimized window). Returns text, or null when it could not open the page.
-	openForExtraction?: (url: string) => Promise<string | null>;
+	// READ-249: also returns the page title Defuddle read.
+	extractHtml: (html: string, url: string) => Promise<{ text: string; title: string }>;
+	// Fallback B (minimized window). Returns text and the tab's title, or null when it could not open the page.
+	openForExtraction?: (url: string) => Promise<{ text: string; title: string } | null>;
 	// READ-38: reads a YouTube video's transcript in the browser (no window, no tab).
 	// Omitted: needs_transcript items are left for the phone.
 	readTranscript?: (videoId: string) => Promise<TranscriptRead>;
@@ -160,9 +161,18 @@ export function youtubeVideoId(url: string): string | null {
 	}
 }
 
-/** Text for one item: worker fetch first, minimized window only when that fails the check. */
-async function gatherText(deps: FinisherDeps, url: string): Promise<string> {
+const MAX_TITLE_CHARS = 300;
+
+/** Pure: a page title fit to send. Empty when blank or when it is just the link. */
+export function cleanTitle(title: string | undefined | null, url: string): string {
+	const t = (title ?? '').trim().slice(0, MAX_TITLE_CHARS).trim();
+	return t === url.trim() ? '' : t;
+}
+
+/** Text and title for one item: worker fetch first, minimized window only when that fails the check. */
+async function gatherText(deps: FinisherDeps, url: string): Promise<{ text: string; title: string }> {
 	let fetched = '';
+	let fetchedTitle = '';
 	let stop = false;
 	try {
 		const page = await deps.fetchPage(url);
@@ -170,20 +180,28 @@ async function gatherText(deps: FinisherDeps, url: string): Promise<string> {
 		// since the window would follow the same redirect.
 		if (page.status === 404 || page.status === 410 || !isSafeFetchUrl(page.finalUrl || url)) stop = true;
 		else if (page.status >= 200 && page.status < 300 && page.html && page.html.length <= MAX_HTML_BYTES) {
-			fetched = (await deps.extractHtml(page.html, page.finalUrl || url)).trim();
+			const x = await deps.extractHtml(page.html, page.finalUrl || url);
+			fetched = x.text.trim();
+			fetchedTitle = x.title;
 		}
 	} catch {
 		fetched = '';
+		fetchedTitle = '';
 	}
-	if (stop) return '';
-	if (checkFullText(fetched).ok || !deps.openForExtraction) return fetched;
-	let opened: string | null = null;
+	if (stop) return { text: '', title: '' };
+	if (checkFullText(fetched).ok || !deps.openForExtraction) return { text: fetched, title: cleanTitle(fetchedTitle, url) };
+	let opened: { text: string; title: string } | null = null;
 	try {
 		opened = await deps.openForExtraction(url);
 	} catch {
 		opened = null;
 	}
-	return pickBestText(fetched, (opened ?? '').trim());
+	const openedText = (opened?.text ?? '').trim();
+	const openedTitle = opened?.title ?? '';
+	const text = pickBestText(fetched, openedText);
+	// Title from the path whose text won; the other path's title when that one has none.
+	const [first, second] = text === fetched ? [fetchedTitle, openedTitle] : [openedTitle, fetchedTitle];
+	return { text, title: cleanTitle(first, url) || cleanTitle(second, url) };
 }
 
 /** One finish run. Never throws; the outcome goes to state and the result. */
@@ -302,7 +320,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 				continue;
 			}
 
-			const text = await gatherText(deps, item.url);
+			const { text, title } = await gatherText(deps, item.url);
 			if (!text || countWords(text) === 0) {
 				state.attempts[item.id] = (state.attempts[item.id] ?? 0) + 1;
 				if (state.attempts[item.id] >= MAX_ITEM_ATTEMPTS) {
@@ -316,7 +334,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 				continue;
 			}
 			// The server judges teaser or whole; a teaser comes back as members_only.
-			await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text)));
+			await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text), title));
 			await saveFinishState(deps.store, state);
 		}
 		state.lastError = null;

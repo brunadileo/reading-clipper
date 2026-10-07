@@ -3,7 +3,10 @@
 //   POST {base}/listWaiting  x-reader-token, { codes: ['needs_text', 'needs_transcript'] } -> { items: [{ id, url, title, created_at, code }] }
 //        code is 'needs_text' (an article) or 'needs_transcript' (a YouTube video, READ-38);
 //        a server that predates it sends no code, read as 'needs_text'.
-//   POST {base}/provideText  x-reader-token, { item_id, text } | { item_id, outcome: 'unreadable' }
+//   POST {base}/provideText  x-reader-token, { item_id, text, title? } | { item_id, outcome: 'unreadable' }
+//        title (READ-249) is sent only when the clipper read a real one from the page; the
+//        server keeps an existing real title and uses this one only when the item has none.
+//        YouTube transcripts send no title.
 //        -> { ok: true, outcome?: 'members_only' }
 // {base} comes from the capture URL setting: ".../api/capture" -> ".../api".
 
@@ -33,7 +36,7 @@ export interface ProvideResult {
 
 export interface WaitingApi {
 	list(): Promise<ListResult>;
-	provideText(itemId: string, text: string): Promise<ProvideResult>;
+	provideText(itemId: string, text: string, title?: string): Promise<ProvideResult>;
 	markUnreadable(itemId: string): Promise<ProvideResult>;
 }
 
@@ -96,9 +99,10 @@ export function createWaitingApi(captureUrl: string, token: string, fetchFn: typ
 			const r = await post(fetchFn, listUrl!, token, { codes: ['needs_text', 'needs_transcript'] });
 			return { ok: r.ok, status: r.status, items: r.ok ? parseWaitingItems(r.json) : [], error: r.error };
 		},
-		async provideText(itemId, text) {
+		async provideText(itemId, text, title) {
 			if (missing) return bad;
-			const r = await post(fetchFn, provideUrl!, token, { item_id: itemId, text });
+			const t = (title ?? '').trim();
+			const r = await post(fetchFn, provideUrl!, token, t ? { item_id: itemId, text, title: t } : { item_id: itemId, text });
 			return { ok: r.ok, status: r.status, outcome: r.json?.outcome, error: r.error };
 		},
 		async markUnreadable(itemId) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
-import { endpointUrl, parseWaitingItems } from './waiting-api';
+import { createWaitingApi, endpointUrl, parseWaitingItems } from './waiting-api';
 import type { WaitingApi, WaitingItem, ProvideResult } from './waiting-api';
 import {
 	AUTO_LIMIT, AUTO_MIN_GAP_MS, FINISH_KEY, NOW_LIMIT, emptyFinishState, ITEM_RETRY_MS, pruneAttempts, runFinisher, shouldRun, youtubeVideoId,
@@ -19,6 +19,9 @@ function setup(opts: {
 	state?: any;
 	pages?: (url: string) => { status: number; html: string; finalUrl?: string } | Error;
 	extract?: (html: string) => string;
+	// READ-249: the title Defuddle reads from the fetched page, and the window tab's title.
+	pageTitle?: string;
+	fallbackTitle?: string;
 	fallback?: (url: string) => string | null;
 	provide?: (id: string, text?: string) => ProvideResult;
 	list?: { ok: boolean; status?: number };
@@ -30,11 +33,11 @@ function setup(opts: {
 	const store = memoryStore(opts.state ? { [FINISH_KEY]: { ...emptyFinishState(), ...opts.state } } : {});
 	const fetched: string[] = [];
 	const opened: string[] = [];
-	const provided: Array<{ id: string; text?: string; outcome?: string }> = [];
+	const provided: Array<{ id: string; text?: string; title?: string; outcome?: string }> = [];
 	let t = 10_000_000;
 	const api: WaitingApi = {
 		list: async () => ({ ok: opts.list?.ok ?? true, status: opts.list?.status ?? 200, items: opts.items ?? [] }),
-		provideText: async (id, text) => { provided.push({ id, text }); return opts.provide?.(id, text) ?? { ok: true, status: 200 }; },
+		provideText: async (id, text, title) => { provided.push({ id, text, title: title || undefined }); return opts.provide?.(id, text) ?? { ok: true, status: 200 }; },
 		markUnreadable: async (id) => { provided.push({ id, outcome: 'unreadable' }); return opts.provide?.(id) ?? { ok: true, status: 200 }; },
 	};
 	const transcriptCalls: string[] = [];
@@ -53,8 +56,12 @@ function setup(opts: {
 			if (r instanceof Error) throw r;
 			return { finalUrl: url, ...r };
 		},
-		extractHtml: async (html) => (opts.extract ? opts.extract(html) : html),
-		openForExtraction: opts.noFallback ? undefined : async (url) => { opened.push(url); return opts.fallback ? opts.fallback(url) : null; },
+		extractHtml: async (html) => ({ text: opts.extract ? opts.extract(html) : html, title: opts.pageTitle ?? '' }),
+		openForExtraction: opts.noFallback ? undefined : async (url) => {
+			opened.push(url);
+			const text = opts.fallback ? opts.fallback(url) : null;
+			return text === null ? null : { text, title: opts.fallbackTitle ?? '' };
+		},
 		sleep: async (ms) => { t += ms; },
 		now: () => (t += 1000),
 		random: () => 0,
@@ -529,6 +536,66 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(youtubeVideoId('https://evil.example/watch?v=abcdefghijk')).toBeNull();
 		expect(youtubeVideoId('https://www.youtube.com/watch')).toBeNull();
 		expect(youtubeVideoId('nope')).toBeNull();
+	});
+});
+
+describe('titles (READ-249)', () => {
+	const url = 'https://site1.example.com/a';
+	const fullPage = () => ({ status: 200, html: full() });
+	const teaserPage = () => ({ status: 200, html: full(120) + ' Subscribe to continue reading this story' });
+
+	it('sends the fetched page title, trimmed', async () => {
+		const { deps, provided } = setup({ items: [item(1)], pages: fullPage, pageTitle: '  Real headline \n' });
+		await runFinisher(deps, 'now');
+		expect(provided[0].title).toBe('Real headline');
+	});
+	it('caps the title at 300 characters', async () => {
+		const { deps, provided } = setup({ items: [item(1)], pages: fullPage, pageTitle: 'x'.repeat(400) });
+		await runFinisher(deps, 'now');
+		expect(provided[0].title).toBe('x'.repeat(300));
+	});
+	it('sends the window title when the window text won', async () => {
+		const { deps, provided } = setup({ items: [item(1)], pages: teaserPage, pageTitle: 'Teaser title', fallback: () => full(900), fallbackTitle: 'Window title' });
+		await runFinisher(deps, 'now');
+		expect(provided[0].text).toBe(full(900));
+		expect(provided[0].title).toBe('Window title');
+	});
+	it('falls back to the other path title when the winner has none', async () => {
+		const a = setup({ items: [item(1)], pages: teaserPage, pageTitle: 'Teaser title', fallback: () => full(900), fallbackTitle: '' });
+		await runFinisher(a.deps, 'now');
+		expect(a.provided[0].title).toBe('Teaser title');
+		const b = setup({ items: [item(1)], pages: () => ({ status: 403, html: '' }), fallback: () => full(900), fallbackTitle: 'Window title' });
+		await runFinisher(b.deps, 'now');
+		expect(b.provided[0].title).toBe('Window title');
+	});
+	it('sends no title when it equals the link or is empty', async () => {
+		const same = setup({ items: [item(1)], pages: fullPage, pageTitle: ` ${url} ` });
+		await runFinisher(same.deps, 'now');
+		expect(same.provided[0].title).toBeUndefined();
+		const empty = setup({ items: [item(1)], pages: fullPage, pageTitle: '   ' });
+		await runFinisher(empty.deps, 'now');
+		expect(empty.provided[0].title).toBeUndefined();
+	});
+	it('sends no title for a transcript', async () => {
+		const { deps, provided } = setup({ items: [video(1)], transcript: () => ({ text: full(), blocked: false }) });
+		await runFinisher(deps, 'now');
+		expect(provided).toEqual([{ id: 'v1', text: full() }]);
+		expect(provided[0].title).toBeUndefined();
+	});
+});
+
+describe('provideText request (READ-249)', () => {
+	const call = async (title?: string) => {
+		let body: any;
+		const fetchFn = (async (_u: any, init: any) => { body = JSON.parse(init.body); return { ok: true, status: 200, json: async () => ({}) }; }) as unknown as typeof fetch;
+		await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).provideText('i1', 'body', title);
+		return body;
+	};
+	it('sends title only when non-empty', async () => {
+		expect(await call('Headline')).toEqual({ item_id: 'i1', text: 'body', title: 'Headline' });
+		expect(await call('')).toEqual({ item_id: 'i1', text: 'body' });
+		expect(await call('  ')).toEqual({ item_id: 'i1', text: 'body' });
+		expect(await call()).toEqual({ item_id: 'i1', text: 'body' });
 	});
 });
 
