@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Lazy Reader Clipper",
 	"homepage_url": "https://reader.lazyailabs.com",
-	"version": "1.11.0",
+	"version": "1.12.0",
 	"description": "Save the page you're on into Lazy Reader, full article text included. Reads the page in your own logged-in browser, so pages Lazy Reader can't fetch on its own still arrive with their text.",
 	"permissions": [
 		"activeTab",

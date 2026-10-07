@@ -4,7 +4,7 @@
 	"default_locale": "en",
 	"name": "Lazy Reader Clipper",
 	"homepage_url": "https://lazyreader.app",
-	"version": "1.11.0",
+	"version": "1.12.0",
 	"description": "Save the page you're on to Lazy Reader with one click, full article text included.",
 	"permissions": [
 		"activeTab",
