@@ -3,7 +3,7 @@ import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
 import { createWaitingApi, endpointUrl, parseWaitingItems } from './waiting-api';
 import type { WaitingApi, WaitingItem, ProvideResult } from './waiting-api';
 import {
-	AUTO_LIMIT, AUTO_MIN_GAP_MS, FINISH_KEY, NOW_LIMIT, emptyFinishState, ITEM_RETRY_MS, pruneAttempts, runFinisher, shouldRun, youtubeVideoId,
+	AUTO_LIMIT, AUTO_MIN_GAP_MS, cleanTitle, FINISH_KEY, NOW_LIMIT, emptyFinishState, ITEM_RETRY_MS, pruneAttempts, runFinisher, shouldRun, youtubeVideoId,
 	type FinisherDeps,
 } from './waiting-finisher';
 import { PREVIEW_NOTE } from './substack-sync';
@@ -553,6 +553,12 @@ describe('titles (READ-249)', () => {
 		const { deps, provided } = setup({ items: [item(1)], pages: fullPage, pageTitle: 'x'.repeat(400) });
 		await runFinisher(deps, 'now');
 		expect(provided[0].title).toBe('x'.repeat(300));
+	});
+	it('cleanTitle compares with the link before capping, so a long link is never sent as a title', () => {
+		const long = 'https://example.com/' + 'a'.repeat(340);
+		expect(cleanTitle(long, long)).toBe('');
+		expect(cleanTitle(` ${long} `, long)).toBe('');
+		expect(cleanTitle('y'.repeat(400), long)).toBe('y'.repeat(300));
 	});
 	it('sends the window title when the window text won', async () => {
 		const { deps, provided } = setup({ items: [item(1)], pages: teaserPage, pageTitle: 'Teaser title', fallback: () => full(900), fallbackTitle: 'Window title' });

@@ -165,8 +165,9 @@ const MAX_TITLE_CHARS = 300;
 
 /** Pure: a page title fit to send. Empty when blank or when it is just the link. */
 export function cleanTitle(title: string | undefined | null, url: string): string {
-	const t = (title ?? '').trim().slice(0, MAX_TITLE_CHARS).trim();
-	return t === url.trim() ? '' : t;
+	const t = (title ?? '').trim();
+	if (t === url.trim()) return '';
+	return t.slice(0, MAX_TITLE_CHARS).trim();
 }
 
 /** Text and title for one item: worker fetch first, minimized window only when that fails the check. */
