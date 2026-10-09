@@ -26,15 +26,6 @@
 		"http://*/*",
 		"https://*/*"
 	],
-	"optional_host_permissions": [
-		"https://substack.com/*",
-		"https://*.substack.com/*",
-		"https://www.instagram.com/*",
-		"https://i.instagram.com/*",
-		"https://www.youtube.com/*",
-		"https://medium.com/*",
-		"https://*.medium.com/*"
-	],
 	"optional_permissions": [
 		"cookies"
 	],
