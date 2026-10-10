@@ -10,6 +10,7 @@ import { flattenShadowDom } from './utils/flatten-shadow-dom';
 import { serializeChildren } from './utils/dom-utils';
 import { saveFile } from './utils/file-utils';
 import { debugLog } from './utils/debug';
+import { defuddleOptions } from './utils/store-build';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
 import { scrollToLoad } from './utils/scroll-to-load';
@@ -231,7 +232,7 @@ declare global {
 
 				// Use parseAsync to ensure async variables like {{transcript}} are available.
 				// If it hangs (e.g. another extension has corrupted fetch), fall back to sync parse.
-				const defuddle = new Defuddle(document, { url: document.URL });
+				const defuddle = new Defuddle(document, defuddleOptions(document.URL));
 				const parseTimeout = new Promise<never>((_, reject) =>
 					setTimeout(() => reject(new Error('parseAsync timeout')), 8000)
 				);
