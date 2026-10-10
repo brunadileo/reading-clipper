@@ -2,10 +2,11 @@
 	"manifest_version": 3,
 	"minimum_chrome_version": "121",
 	"default_locale": "en",
-	"name": "Lazy Reader Clipper",
+	"name": "Lazy Reader: Read Later Clipper with AI Summaries",
+	"short_name": "Lazy Reader Clipper",
 	"homepage_url": "https://lazyreader.app",
 	"version": "1.13.0",
-	"description": "Save the page you're on to Lazy Reader with one click, full article text included.",
+	"description": "Save pages in one click, including paywalled ones you're signed in to. A summary arrives a minute later.",
 	"permissions": [
 		"activeTab",
 		"commands",
