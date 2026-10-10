@@ -7,7 +7,7 @@ import { extractPageContent, initializePageContent } from '../utils/content-extr
 import { compileTemplate } from '../utils/template-compiler';
 import { initializeIcons, getPropertyTypeIcon } from '../icons/icons';
 import { findMatchingTemplate, initializeTriggers } from '../utils/triggers';
-import { getLocalStorage, setLocalStorage, loadSettings, generalSettings, Settings, loadReadingSettings, DEFAULT_READING_LANE } from '../utils/storage-utils';
+import { getLocalStorage, setLocalStorage, loadSettings, generalSettings, Settings, loadReadingSettings } from '../utils/storage-utils';
 import { escapeHtml, unescapeValue } from '../utils/string-utils';
 import { loadTemplates, createDefaultTemplate } from '../managers/template-manager';
 import browser from '../utils/browser-polyfill';
@@ -25,7 +25,6 @@ import { sanitizeFileName } from '../utils/string-utils';
 import { saveFile } from '../utils/file-utils';
 import { translatePage, getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { formatPropertyValue } from '../utils/shared';
-import { renderLaneTabs, syncLaneTabs } from '../utils/lane-tabs';
 
 interface ReaderModeResponse {
 	success: boolean;
@@ -37,7 +36,6 @@ let currentTemplate: Template | null = null;
 let templates: Template[] = [];
 let currentVariables: { [key: string]: string } = {};
 let currentTabId: number | undefined;
-let lastSelectedVault: string | null = null;
 
 const isSidePanel = window.location.pathname.includes('side-panel.html');
 const urlParams = new URLSearchParams(window.location.search);
@@ -193,13 +191,6 @@ async function initializeExtension(tabId: number) {
 
 		currentTemplate = templates[0];
 		debugLog('Templates', 'Current template set to:', currentTemplate);
-
-		// Load last selected lane (the vault-select dropdown now picks a Reading lane)
-		lastSelectedVault = await getLocalStorage('lastSelectedVault');
-		if (!lastSelectedVault) {
-			lastSelectedVault = DEFAULT_READING_LANE;
-		}
-		debugLog('Vaults', 'Last selected lane:', lastSelectedVault);
 
 		const tab = await getTabInfo(tabId);
 		if (!tab.url || isBlankPage(tab.url)) {
@@ -372,7 +363,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 			initializeIcons(settingsButton);
 		}
 		document.getElementById('note-name-field')?.setAttribute('aria-label', getMessage('pageTitleLabel'));
-		document.getElementById('lane-tabs')?.setAttribute('aria-label', getMessage('laneTabsLabel'));
 		void updateConnectionFoot();
 
 		// Initialize the rest of the popup
@@ -384,7 +374,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 			try {
 				// DOM-dependent initializations
-				updateVaultDropdown();
 				populateTemplateDropdown();
 				setupEventListeners(currentTabId);
 				await initializeUI();
@@ -784,14 +773,6 @@ function populateTemplateDropdown() {
 function buildTemplateFieldsSkeleton(template: Template | null) {
 	if (!template) return;
 
-	// The vault dropdown picks a Reading lane. A template's vault name is not
-	// a lane, so only the remembered lane applies here.
-	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement;
-	if (vaultDropdown && lastSelectedVault && READING_LANES.some(lane => lane.value === lastSelectedVault)) {
-		vaultDropdown.value = lastSelectedVault;
-		syncLaneTabsToSelect();
-	}
-
 	const existingTemplateProperties = document.querySelector('.metadata-properties') as HTMLElement;
 
 	const newTemplateProperties = createElementWithClass('div', 'metadata-properties');
@@ -1056,60 +1037,6 @@ async function getReplacedTemplate(template: Template, variables: { [key: string
 	}
 
 	return replacedTemplate;
-}
-
-// The dropdown that used to pick an Obsidian vault now picks a Reading lane.
-// Same select element (#vault-select inside #vault-container), fixed options
-// instead of the user's configured vault list.
-const READING_LANES: { value: string; labelKey: string }[] = [
-	{ value: 'read-now', labelKey: 'laneReadNow' },
-	{ value: 'read-later', labelKey: 'laneReadLater' },
-	{ value: 'file-it', labelKey: 'laneFileIt' }
-];
-
-function updateVaultDropdown() {
-	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement | null;
-	const vaultContainer = document.getElementById('vault-container');
-
-	if (!vaultDropdown || !vaultContainer) return;
-
-	// Clear existing options
-	vaultDropdown.textContent = '';
-
-	READING_LANES.forEach(lane => {
-		const option = document.createElement('option');
-		option.value = lane.value;
-		option.textContent = getMessage(lane.labelKey);
-		vaultDropdown.appendChild(option);
-	});
-
-	// Lanes are fixed, unlike Obsidian vaults, so the picker is always shown.
-	vaultContainer.style.display = 'block';
-	if (lastSelectedVault && READING_LANES.some(lane => lane.value === lastSelectedVault)) {
-		vaultDropdown.value = lastSelectedVault;
-	} else {
-		vaultDropdown.value = DEFAULT_READING_LANE;
-	}
-
-	// Add event listener to update lastSelectedVault when changed
-	vaultDropdown.addEventListener('change', () => {
-		lastSelectedVault = vaultDropdown.value;
-		setLocalStorage('lastSelectedVault', lastSelectedVault);
-	});
-
-	// READ-236: the visible picker is the lane tabs; the select stays the source of truth.
-	laneTabsEl = document.getElementById('lane-tabs');
-	if (laneTabsEl) {
-		renderLaneTabs(laneTabsEl, vaultDropdown, READING_LANES.map(lane => ({ value: lane.value, label: getMessage(lane.labelKey) })));
-	}
-}
-
-let laneTabsEl: HTMLElement | null = null;
-
-// A programmatic `value =` fires no event, so the tabs are told to follow.
-function syncLaneTabsToSelect(): void {
-	const select = document.getElementById('vault-select') as HTMLSelectElement | null;
-	if (laneTabsEl && select) syncLaneTabs(laneTabsEl, select);
 }
 
 // READ-236: foot line from the stored token only, no network call.
@@ -1421,12 +1348,11 @@ let readingSaveInFlight = false;
 async function handleClipObsidian(): Promise<void> {
 	if (!currentTemplate || readingSaveInFlight) return;
 
-	const laneDropdown = document.getElementById('vault-select') as HTMLSelectElement;
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 	const noteNameField = document.getElementById('note-name-field') as HTMLInputElement;
 	const interpretBtn = document.getElementById('interpret-btn') as HTMLButtonElement;
 
-	if (!laneDropdown || !noteContentField) {
+	if (!noteContentField) {
 		showError('Some required fields are missing. Please try reloading the extension.');
 		return;
 	}
@@ -1450,13 +1376,11 @@ async function handleClipObsidian(): Promise<void> {
 		// so lazily drawn blocks are in the text. Keeps the longer content.
 		await refreshContentWithScroll(noteContentField, noteNameField);
 
-		const selectedLane = laneDropdown.value || DEFAULT_READING_LANE;
 		const noteName = noteNameField?.value || '';
 		const tabInfo = await getCurrentTabInfo();
 
 		const body = buildReadingCaptureBody({
 			url: tabInfo.url,
-			lane: selectedLane,
 			title: noteName,
 			siteName: currentVariables['{{site}}'] || '',
 			text: noteContentField.value,
@@ -1467,10 +1391,7 @@ async function handleClipObsidian(): Promise<void> {
 		const result = await sendToReading(body, readingSettings.captureUrl, readingSettings.token);
 
 		if (result.ok) {
-			await incrementStat('addToObsidian', selectedLane, '', tabInfo.url, tabInfo.title);
-
-			lastSelectedVault = selectedLane;
-			await setLocalStorage('lastSelectedVault', lastSelectedVault);
+			await incrementStat('addToObsidian', 'reading', '', tabInfo.url, tabInfo.title);
 
 			const wasCut = body.text?.endsWith(READING_TEXT_CUT_NOTE) ?? false;
 			showReadingSuccess(result.data?.readUrl, getMessage(wasCut ? 'savedToReadingCut' : 'savedToReading'));
