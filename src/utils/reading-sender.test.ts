@@ -2,10 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { buildReadingCaptureBody, captureWithToken, postCapture, fitReadingText, MAX_READING_TEXT_BYTES, READING_TEXT_CUT_NOTE } from './reading-sender';
 
 describe('buildReadingCaptureBody', () => {
-	it('maps title and site name, keeps url and lane as given', () => {
+	it('maps title and site name, keeps url as given', () => {
 		const body = buildReadingCaptureBody({
 			url: 'https://example.com/article',
-			lane: 'read-now',
 			title: 'My Article',
 			siteName: 'Example Site',
 			text: 'Some article body text.',
@@ -13,7 +12,6 @@ describe('buildReadingCaptureBody', () => {
 
 		expect(body).toEqual({
 			url: 'https://example.com/article',
-			lane: 'read-now',
 			title: 'My Article',
 			site_name: 'Example Site',
 			text: 'Some article body text.',
@@ -23,7 +21,6 @@ describe('buildReadingCaptureBody', () => {
 	it('drops the text key entirely when the body is empty', () => {
 		const body = buildReadingCaptureBody({
 			url: 'https://example.com/article',
-			lane: 'read-later',
 			title: 'My Article',
 			siteName: 'Example Site',
 			text: '',
@@ -35,7 +32,6 @@ describe('buildReadingCaptureBody', () => {
 	it('drops the text key when the body is whitespace only', () => {
 		const body = buildReadingCaptureBody({
 			url: 'https://example.com/article',
-			lane: 'file-it',
 			title: 'My Article',
 			siteName: 'Example Site',
 			text: '   \n\t  ',
@@ -49,7 +45,6 @@ describe('buildReadingCaptureBody', () => {
 
 		const body = buildReadingCaptureBody({
 			url: 'https://example.com/article',
-			lane: 'read-now',
 			title: 'My Article',
 			siteName: 'Example Site',
 			text,
@@ -100,7 +95,6 @@ describe('fitReadingText', () => {
 	it('buildReadingCaptureBody sends the cut text', () => {
 		const body = buildReadingCaptureBody({
 			url: 'https://example.com/long',
-			lane: 'read-later',
 			title: 'Long',
 			siteName: 'Example',
 			text: 'word '.repeat(Math.ceil(MAX_READING_TEXT_BYTES / 5) + 1000),
@@ -111,13 +105,13 @@ describe('fitReadingText', () => {
 
 describe('source and postCapture', () => {
 	it('adds source only when given', () => {
-		const base = { url: 'https://a.test/p/x', lane: 'read-now', title: 'T', siteName: 'S', text: 'body' };
+		const base = { url: 'https://a.test/p/x', title: 'T', siteName: 'S', text: 'body' };
 		expect(buildReadingCaptureBody(base)).not.toHaveProperty('source');
 		expect(buildReadingCaptureBody({ ...base, source: 'substack' }).source).toBe('substack');
 	});
 
 	it('adds via only when given, and popup and sync bodies carry the right channel (READ-200)', () => {
-		const base = { url: 'https://a.test/p/x', lane: 'read-now', title: 'T', siteName: 'S', text: 'body' };
+		const base = { url: 'https://a.test/p/x', title: 'T', siteName: 'S', text: 'body' };
 		expect(buildReadingCaptureBody(base)).not.toHaveProperty('via');
 		const popup = buildReadingCaptureBody({ ...base, via: 'chrome-clipper' });
 		expect(popup.via).toBe('chrome-clipper');
@@ -136,15 +130,15 @@ describe('source and postCapture', () => {
 			seen = { url, init };
 			return { ok: true, status: 200, json: async () => ({ id: 'abc', created: true }) } as any;
 		}) as any;
-		const r = await postCapture({ url: 'https://a.test', lane: 'read-now', title: '', site_name: '' }, 'https://cap.test/capture', 'secret-token', fetchFn);
+		const r = await postCapture({ url: 'https://a.test', title: '', site_name: '' }, 'https://cap.test/capture', 'secret-token', fetchFn);
 		expect(r).toMatchObject({ ok: true, status: 200, data: { id: 'abc' } });
 		expect(seen.init.headers['x-reader-token']).toBe('secret-token');
-		expect(await postCapture({ url: 'u', lane: 'l', title: '', site_name: '' }, 'https://cap.test', '')).toMatchObject({ ok: false, status: 401 });
+		expect(await postCapture({ url: 'u', title: '', site_name: '' }, 'https://cap.test', '')).toMatchObject({ ok: false, status: 401 });
 	});
 });
 
 describe('captureWithToken (no silent reconnect)', () => {
-	const body = { url: 'https://example.com/a', lane: 'Read later', title: 'T', site_name: 'example.com' };
+	const body = { url: 'https://example.com/a', title: 'T', site_name: 'example.com' };
 	// Anything that could open a tab or read a session would go through these.
 	const tabsCreate = vi.fn();
 	(globalThis as any).chrome = { tabs: { create: tabsCreate }, scripting: { executeScript: vi.fn() } };

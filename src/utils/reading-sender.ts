@@ -6,7 +6,6 @@ import browser from './browser-polyfill';
 
 export interface ReadingCaptureBody {
 	url: string;
-	lane: string;
 	title: string;
 	site_name: string;
 	text?: string;
@@ -22,7 +21,6 @@ export type ReadingVia = 'chrome-clipper' | 'substack-saved' | 'instagram-saved'
 
 export interface BuildReadingCaptureBodyParams {
 	url: string;
-	lane: string;
 	title: string;
 	siteName: string;
 	text: string;
@@ -74,7 +72,6 @@ export function fitReadingText(text: string): string {
 export function buildReadingCaptureBody(params: BuildReadingCaptureBodyParams): ReadingCaptureBody {
 	const body: ReadingCaptureBody = {
 		url: params.url,
-		lane: params.lane,
 		title: params.title,
 		site_name: params.siteName,
 	};

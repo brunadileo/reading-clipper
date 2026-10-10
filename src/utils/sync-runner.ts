@@ -5,7 +5,7 @@
 // connects them to chrome.storage.local, ONE chrome.alarm and the idle event.
 import browser from './browser-polyfill';
 import { buildReadingCaptureBody, postCapture } from './reading-sender';
-import { DEFAULT_READING_LANE, loadReadingSettings } from './storage-utils';
+import { loadReadingSettings } from './storage-utils';
 import { loadState, saveState, type SyncDeps, type SyncService } from './sync-core';
 import { runSubstackSync } from './substack-sync';
 import { runInstagramSync } from './instagram-sync';
@@ -46,7 +46,6 @@ function makeDeps(service: SyncService): SyncDeps {
 			const settings = await loadReadingSettings();
 			const body = buildReadingCaptureBody({
 				url: post.url,
-				lane: DEFAULT_READING_LANE,
 				title: post.title,
 				siteName: post.siteName,
 				text: text ?? '',

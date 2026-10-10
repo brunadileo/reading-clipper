@@ -340,7 +340,6 @@ export async function getClipHistory(): Promise<HistoryEntry[]> {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_READING_CAPTURE_URL = 'https://lazyreader.app/api/capture';
-export const DEFAULT_READING_LANE = 'read-now';
 
 export interface ReadingSettings {
 	captureUrl: string;
