@@ -465,15 +465,6 @@
 			}
 		}
 	},
-	"laneFileIt": {
-		"message": "File it"
-	},
-	"laneReadLater": {
-		"message": "Read later"
-	},
-	"laneReadNow": {
-		"message": "Read now"
-	},
 	"language": {
 		"message": "Language"
 	},
@@ -1139,9 +1130,6 @@
 	},
 	"version": {
 		"message": "Version"
-	},
-	"laneTabsLabel": {
-		"message": "Save as"
 	},
 	"pageTitleLabel": {
 		"message": "Page title"
