@@ -1,5 +1,5 @@
 // READ-236: the popup on the Lazy Reader look. Everything here sits on top of
-// the generated _lazy-ui.scss classes (.lr-popup-head, .lr-page-card, .lr-tabs,
+// the generated _lazy-ui.scss classes (.lr-popup-head, .lr-page-card,
 // .lr-btn, .lr-connect ...) and only adds what the clipper needs that the
 // design copy does not have. Gaps to hand to READ-237 are listed in the plan's run log.
 // Scoped to #popup-container so the side panel (old markup) is untouched.
