@@ -12,10 +12,10 @@ describe('fetchIsAdmin', () => {
 		expect(await fetchIsAdmin(URL, 't', reply(200, { role: 'admin' }))).toBe(true);
 		expect(await fetchIsAdmin(URL, 't', reply(200, { data: { role: 'admin' } }))).toBe(true);
 	});
-	it('sends the token to getMyProfile', async () => {
+	it('sends the token to getMyRole', async () => {
 		const f = reply(200, { role: 'user' });
 		expect(await fetchIsAdmin(URL, 'tok', f)).toBe(false);
-		expect(f.mock.calls[0][0]).toBe('https://lazyreader.app/api/getMyProfile');
+		expect(f.mock.calls[0][0]).toBe('https://lazyreader.app/api/getMyRole');
 		expect(f.mock.calls[0][1].headers['x-reader-token']).toBe('tok');
 	});
 	it('fails closed on every odd input', async () => {
