@@ -37,6 +37,9 @@ export type YoutubeRunKind = 'alarm' | 'manual' | 'older';
 export interface TranscriptRead {
 	// null when nothing usable was read (the link is saved alone).
 	text: string | null;
+	// READ-357: the video's title and channel from the same player response as the transcript.
+	title?: string;
+	author?: string;
 	// YouTube answered 429 or "not a bot": no more transcript attempts this run.
 	blocked: boolean;
 	// The answer was not definite (timeout, network error, 5xx, 403, empty caption body): no more

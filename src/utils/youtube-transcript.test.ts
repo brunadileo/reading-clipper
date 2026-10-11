@@ -103,12 +103,32 @@ describe('readYouTubeTranscript', () => {
 			if (isCaption(url)) return { text: json3Raw };
 		});
 		const r = await readYouTubeTranscript(fn, VIDEO);
-		expect(r).toEqual({ text: expectedMarkdown, blocked: false });
+		expect(r).toEqual({ text: expectedMarkdown, blocked: false, title: 'How I Coded the Perks in my Roguelike', author: "Game Maker's Toolkit" });
 		const p = calls.find((c) => isPlayer(c.url))!;
 		expect(p.client).toBe('VISIONOS');
 		expect(calls.every((c) => c.init.credentials === 'omit')).toBe(true);
 		expect((p.init.headers as any)['X-Goog-Visitor-Id']).toBe('VISITOR123');
 		expect(calls.find((c) => isCaption(c.url))!.url).toContain('&fmt=json3');
+	});
+
+	it('READ-357: title and author are trimmed; blank or non-string ones are left out', async () => {
+		const read = async (vd: any) => {
+			const { fn } = fakeYt((url) => {
+				if (url.includes('/watch?v=')) return { text: WATCH };
+				if (isPlayer(url)) return { json: { ...player, videoDetails: vd } };
+				if (isCaption(url)) return { text: json3Raw };
+			});
+			return readYouTubeTranscript(fn, VIDEO);
+		};
+		const ok = await read({ title: '  Hi <script>alert(1)</script> \u00e9\u00e7  ', author: ' Chan ', shortDescription: 'x' });
+		expect(ok.title).toBe('Hi <script>alert(1)</script> \u00e9\u00e7');
+		expect(ok.author).toBe('Chan');
+		for (const vd of [{ title: '   ', author: 5, shortDescription: 'x' }, undefined, null]) {
+			const r = await read(vd);
+			expect(r.text).toBeTruthy();
+			expect('title' in r).toBe(false);
+			expect('author' in r).toBe(false);
+		}
 	});
 
 	it('falls back to the XML body when json3 comes back empty', async () => {
