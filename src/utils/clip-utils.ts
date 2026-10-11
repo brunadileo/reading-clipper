@@ -16,6 +16,8 @@ export function parseForClip(doc: Document) {
 				...Array.from(readerArticle.childNodes).map(n => readerDoc.importNode(n, true))
 			);
 		}
+		// READ-358: the throwaway reader copy too; it is not the page, so nothing to undo.
+		expandShortenedLinks(readerDoc, doc.URL);
 		return new Defuddle(readerDoc, { url: '' }).parse();
 	}
 	// READ-358: X cuts long links with an ellipsis; show the full address for the parse.
