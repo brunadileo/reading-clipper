@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { isValidUrl, isBlankPage, isRestrictedUrl } from './active-tab-manager';
+import { isValidUrl, isBlankPage, isRestrictedUrl, isLazyReaderUrl } from './active-tab-manager';
 
 describe('isValidUrl', () => {
 	test('returns true for http URLs', () => {
@@ -80,5 +80,31 @@ describe('isRestrictedUrl', () => {
 	test('handles invalid URLs gracefully', () => {
 		expect(isRestrictedUrl('')).toBe(false);
 		expect(isRestrictedUrl('not-a-url')).toBe(false);
+	});
+});
+
+describe('isLazyReaderUrl', () => {
+	test('is true for lazyreader.app pages of any path', () => {
+		expect(isLazyReaderUrl('https://lazyreader.app/')).toBe(true);
+		expect(isLazyReaderUrl('https://lazyreader.app/item/abc')).toBe(true);
+		expect(isLazyReaderUrl('https://lazyreader.app/connect/clipper')).toBe(true);
+		expect(isLazyReaderUrl('http://lazyreader.app/x')).toBe(true);
+		expect(isLazyReaderUrl('https://lazyreader.app/item/abc?q=<script>#h')).toBe(true);
+	});
+	test('is true for lazyreader.pages.dev', () => {
+		expect(isLazyReaderUrl('https://lazyreader.pages.dev/')).toBe(true);
+	});
+	test('is false for subdomains, lookalikes and other sites', () => {
+		expect(isLazyReaderUrl('https://docs.lazyreader.app/')).toBe(false);
+		expect(isLazyReaderUrl('https://lazyreader.app.evil.com/')).toBe(false);
+		expect(isLazyReaderUrl('https://evil.com/lazyreader.app')).toBe(false);
+		expect(isLazyReaderUrl('https://substack.com/p/x')).toBe(false);
+	});
+	test('is false for junk input', () => {
+		expect(isLazyReaderUrl('not a url')).toBe(false);
+		expect(isLazyReaderUrl('')).toBe(false);
+		expect(isLazyReaderUrl(undefined)).toBe(false);
+		expect(isLazyReaderUrl(null as unknown as string)).toBe(false);
+		expect(isLazyReaderUrl('https://lazyreader.app\u00e9.com/')).toBe(false);
 	});
 });

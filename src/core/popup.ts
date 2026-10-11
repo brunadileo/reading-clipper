@@ -18,7 +18,7 @@ import { initializeInterpreter, handleInterpreterUI, collectPromptVariables } fr
 import { adjustNoteNameHeight } from '../utils/ui-utils';
 import { debugLog, isDebugMode } from '../utils/debug';
 import { showVariables, initializeVariablesPanel, updateVariablesPanel } from '../managers/inspect-variables';
-import { isBlankPage, isValidUrl, isRestrictedUrl } from '../utils/active-tab-manager';
+import { isBlankPage, isValidUrl, isRestrictedUrl, isLazyReaderUrl } from '../utils/active-tab-manager';
 import { memoizeWithExpiration } from '../utils/memoize';
 import { debounce } from '../utils/debounce';
 import { sanitizeFileName } from '../utils/string-utils';
@@ -36,6 +36,8 @@ let currentTemplate: Template | null = null;
 let templates: Template[] = [];
 let currentVariables: { [key: string]: string } = {};
 let currentTabId: number | undefined;
+// True while the side panel's tab is a lazyreader.app page (READ-238): quick clip must not save it.
+let onLazyReaderPage = false;
 
 const isSidePanel = window.location.pathname.includes('side-panel.html');
 const urlParams = new URLSearchParams(window.location.search);
@@ -205,6 +207,10 @@ async function initializeExtension(tabId: number) {
 			showError('pageCannotBeClipped');
 			return;
 		}
+		if (isLazyReaderUrl(tab.url)) {
+			showError('onLazyReader');
+			return;
+		}
 
 		// Setup message listeners
 		setupMessageListeners();
@@ -239,6 +245,10 @@ function setupStorageListeners() {
 function setupMessageListeners() {
 	browser.runtime.onMessage.addListener((request: any, sender: browser.Runtime.MessageSender, sendResponse: (response?: any) => void) => {
 		if (request.action === "triggerQuickClip") {
+			if (onLazyReaderPage) {
+				sendResponse({success: false, error: 'lazyreader.app page'});
+				return true;
+			}
 			handleClipObsidian().then(() => {
 				sendResponse({success: true});
 			}).catch((error) => {
@@ -256,8 +266,11 @@ function setupMessageListeners() {
 			// Only handle active tab changes if we're in side panel mode, not iframe mode
 			if (!isIframe) {
 				currentTabId = request.tabId;
+				onLazyReaderPage = isLazyReaderUrl(request.url);
 				if (request.isRestrictedUrl) {
 					showError('pageCannotBeClipped');
+				} else if (isLazyReaderUrl(request.url)) {
+					showError('onLazyReader');
 				} else if (request.isValidUrl) {
 					if (currentTabId !== undefined) {
 						refreshFields(currentTabId); // Force template check when URL changes
@@ -672,6 +685,11 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 		}
 		if (isRestrictedUrl(tab.url)) {
 			showError('pageCannotBeClipped');
+			return;
+		}
+		onLazyReaderPage = isLazyReaderUrl(tab.url);
+		if (onLazyReaderPage) {
+			showError('onLazyReader');
 			return;
 		}
 

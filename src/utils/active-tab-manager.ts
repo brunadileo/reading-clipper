@@ -56,3 +56,15 @@ export function isRestrictedUrl(url: string): boolean {
 		return false;
 	}
 }
+
+// True for the Lazy Reader web app itself (READ-238). The clipper refuses these
+// pages: reading them would send the feed list as an article.
+export function isLazyReaderUrl(url: string | undefined): boolean {
+	if (!url) return false;
+	try {
+		const hostname = new URL(url).hostname;
+		return hostname === 'lazyreader.app' || hostname === 'lazyreader.pages.dev';
+	} catch {
+		return false;
+	}
+}
