@@ -113,15 +113,15 @@ async function refresh(service: SyncService): Promise<void> {
 			// Exhausted only when every chosen list has been read to its end.
 			const c = state.youtube?.cursors;
 			const lists = [state.youtube?.watchLater ? c?.wl : null, state.youtube?.playlistId ? c?.pl : null].filter(Boolean) as Array<{ exhausted: boolean; started: boolean }>;
-			older.disabled = !state.enabled || state.running || lists.length === 0 || lists.every((l) => l.exhausted || !l.started);
+			older.disabled = !state.enabled || isRunning(state, Date.now()) || lists.length === 0 || lists.every((l) => l.exhausted || !l.started);
 		} else {
-			older.disabled = !state.enabled || state.running || state.olderExhausted;
+			older.disabled = !state.enabled || isRunning(state, Date.now()) || state.olderExhausted;
 		}
 		older.hidden = !state.enabled;
 	}
 	const run = document.getElementById(`sync-${service}-run`) as HTMLButtonElement | null;
 	if (run) {
-		run.disabled = state.running;
+		run.disabled = isRunning(state, Date.now());
 		run.hidden = !state.enabled;
 	}
 }
