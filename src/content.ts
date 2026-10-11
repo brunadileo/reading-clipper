@@ -11,6 +11,7 @@ import { serializeChildren } from './utils/dom-utils';
 import { saveFile } from './utils/file-utils';
 import { debugLog } from './utils/debug';
 import { defuddleOptions } from './utils/store-build';
+import { expandShortenedLinks } from './utils/expand-short-links';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
 import { scrollToLoad } from './utils/scroll-to-load';
@@ -237,8 +238,15 @@ declare global {
 				const parseTimeout = new Promise<never>((_, reject) =>
 					setTimeout(() => reject(new Error('parseAsync timeout')), 8000)
 				);
-				const defuddled = await Promise.race([defuddle.parseAsync(), parseTimeout])
-					.catch(() => defuddle.parse());
+				// READ-358: X cuts long links in post text with an ellipsis; show the full address for the parse.
+				const restoreLinks = expandShortenedLinks(document, document.URL);
+				let defuddled;
+				try {
+					defuddled = await Promise.race([defuddle.parseAsync(), parseTimeout])
+						.catch(() => defuddle.parse());
+				} finally {
+					restoreLinks();
+				}
 				const extractedContent: { [key: string]: string } = {
 					...defuddled.variables,
 				};
