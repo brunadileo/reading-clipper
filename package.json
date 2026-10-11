@@ -26,7 +26,7 @@
 		"build:cli": "node scripts/build-cli.mjs",
 		"build:api": "node scripts/build-api.mjs",
 		"dev": "npm run dev:chrome",
-		"test": "vitest run",
+		"test": "vitest run --maxWorkers=2",
 		"test:watch": "vitest",
 		"update-locales": "ts-node --project scripts/tsconfig.json scripts/update-locales.ts",
 		"check-strings": "ts-node --project scripts/tsconfig.json scripts/check-unused-strings.ts",
