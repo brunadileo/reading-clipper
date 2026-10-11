@@ -7,6 +7,7 @@ import browser from './browser-polyfill';
 import { buildReadingCaptureBody, postCapture } from './reading-sender';
 import { loadReadingSettings } from './storage-utils';
 import { loadState, saveState, type SyncDeps, type SyncService } from './sync-core';
+import { fetchIsAdmin } from './admin-role';
 import { runSubstackSync } from './substack-sync';
 import { runInstagramSync } from './instagram-sync';
 import { applyYoutubeConfig, checkPlaylist, extractPlaylistId, hasSource, runYoutubeSync, type YoutubeConfigChange, type YoutubeDeps } from './youtube-sync';
@@ -100,6 +101,17 @@ async function runMedium(kind: 'manual' | 'older'): Promise<MediumRunResult> {
 	}
 }
 
+/** READ-345: deps whose isAdmin asks the server who the stored token belongs to. */
+function makeAdminDeps(service: SyncService): SyncDeps {
+	return {
+		...makeDeps(service),
+		isAdmin: async () => {
+			const { token, captureUrl } = await loadReadingSettings();
+			return fetchIsAdmin(captureUrl, token);
+		},
+	};
+}
+
 const mediumLine = (r: MediumRunResult) =>
 	r.stopped
 		? (r.message ?? `stopped (${r.stopped})`)
@@ -132,7 +144,7 @@ function buildJobs(manual: boolean): SyncJob[] {
 			run: async () => {
 				// Scheduled runs lean on the shared one-hour floor when the previous
 				// Instagram attempt was scheduled too (see instagram-sync.ts).
-				const r = await runInstagramSync(makeDeps('instagram'), manual ? 'sync' : 'scheduled');
+				const r = await runInstagramSync(makeAdminDeps('instagram'), manual ? 'sync' : 'scheduled');
 				if (r.stopped) return r.message ?? `stopped (${r.stopped})`;
 				return `${r.sent} saved`;
 			},
@@ -210,8 +222,7 @@ export function isRowSyncRequest(req: { action?: string; service?: unknown; kind
 /** Load older (one service) or the web's Finish now (the finish job only), under the same lock. */
 export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'youtube', trigger: 'older' | 'finish-now' | 'finish-push' | 'now') {
 	if (trigger === 'now' && id !== 'finish') {
-		// A service row's own Sync (READ-250): that service as a manual run (Instagram keeps
-		// its one-hour gate), then finish, one locked sequence that leaves the schedule clock alone.
+		// A service row's own Sync (READ-250): that service as a manual run, then finish, one locked sequence that leaves the schedule clock alone.
 		const manualJobs = buildJobs(true);
 		const job = manualJobs.find((j) => j.id === id)!;
 		job.enabled = () => isOn(id);
@@ -240,7 +251,7 @@ export function runOne(id: 'finish' | 'substack' | 'instagram' | 'medium' | 'you
 		return runSequence([job, finish], sequenceDeps, trigger, { recordRun: false, wakeJob: wakeJob() });
 	} else if (id === 'instagram') {
 		job.run = async () => {
-			const r = await runInstagramSync(makeDeps('instagram'), 'older');
+			const r = await runInstagramSync(makeAdminDeps('instagram'), 'older');
 			return r.stopped ? (r.message ?? `stopped (${r.stopped})`) : `${r.sent} saved${r.message ? `. ${r.message}` : ''}`;
 		};
 	} else if (id === 'youtube') {

@@ -257,13 +257,32 @@ describe('lock', () => {
 		expect([a.skipped, b.skipped]).toContain(null);
 		expect(log).toEqual(['start:x', 'end:x']);
 	});
-	it('a stored running flag from another worker blocks, until it is stale', async () => {
+	it('a stored running flag blocks a scheduled trigger, until it is stale', async () => {
 		const h = harness();
 		await saveSchedule(h.store, { ...(await loadSchedule(h.store)), running: true, lastAttemptAt: h.now() - 60_000 });
 		const log: string[] = [];
-		expect((await runSequence([job('x', log)], h.deps, 'now')).skipped).toBe('busy');
+		expect((await runSequence([job('x', log)], h.deps, 'alarm')).skipped).toBe('busy');
+		expect((await runSequence([job('x', log)], h.deps, 'finish-push')).skipped).toBe('busy');
 		await saveSchedule(h.store, { ...(await loadSchedule(h.store)), running: true, lastAttemptAt: h.now() - STALE_RUN_MS - 1 });
-		expect((await runSequence([job('x', log)], h.deps, 'now')).skipped).toBeNull();
+		expect((await runSequence([job('x', log)], h.deps, 'alarm')).skipped).not.toBe('busy');
+	});
+	it('a press ignores a fresh stored running flag left by a dead run (READ-345)', async () => {
+		for (const trigger of ['now', 'older', 'finish-now'] as const) {
+			const h = harness();
+			await saveSchedule(h.store, { ...(await loadSchedule(h.store)), running: true, lastAttemptAt: h.now() - 60_000 });
+			const log: string[] = [];
+			const res = await runSequence([job('x', log)], h.deps, trigger);
+			expect(res.skipped).toBeNull();
+			expect(log).toEqual(['start:x', 'end:x']);
+			expect((await loadSchedule(h.store)).running).toBe(false);
+		}
+	});
+	it('two presses started together with a dead flag stored: the second answers busy (READ-345)', async () => {
+		const h = harness();
+		await saveSchedule(h.store, { ...(await loadSchedule(h.store)), running: true, lastAttemptAt: h.now() - 60_000 });
+		const log: string[] = [];
+		const [a, b] = await Promise.all([runSequence([job('x', log)], h.deps, 'now'), runSequence([job('x', log)], h.deps, 'now')]);
+		expect([a.skipped, b.skipped].sort()).toEqual(['busy', null]);
 		expect(log).toEqual(['start:x', 'end:x']);
 	});
 	it('releases the lock after a run, so the next trigger works', async () => {

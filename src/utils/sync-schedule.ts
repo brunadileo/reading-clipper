@@ -132,6 +132,8 @@ let inFlight = false;
  * startup, idle) run only when a full interval has passed and the frequency is
  * not "manual"; 'now', 'older' and 'finish-now' run at once. A second trigger
  * while a run is going is ignored. Never throws.
+ * A press ('now', 'older', 'finish-now') ignores a stored running flag left by a dead run (READ-345);
+ * only the in-memory lock stops it.
  * recordRun false (Load older, web Finish now) leaves the schedule's clock alone.
  * wakeJob: when a push wake arrived during the run (PENDING_WAKE_KEY), it runs
  * once more at the end, so items the run itself parked are not left for the next hour.
@@ -149,7 +151,10 @@ export async function runSequence(
 		const state = await loadSchedule(deps.store);
 		const scheduled = trigger === 'alarm' || trigger === 'startup' || trigger === 'idle';
 		const now = deps.now();
-		if (isRunning(state, now)) { out.skipped = 'busy'; return out; }
+		// READ-345: inFlight above already proves no run is alive in this worker, so a
+		// stored flag is a dead run. Only triggers that did not come from a press honour it.
+		const pressed = trigger === 'now' || trigger === 'older' || trigger === 'finish-now';
+		if (!pressed && isRunning(state, now)) { out.skipped = 'busy'; return out; }
 		if (scheduled) {
 			if (state.frequency === 'manual') { out.skipped = 'manual'; return out; }
 			if (!isDue(state.frequency, state.lastRunAt, now)) { out.skipped = 'not-due'; return out; }
