@@ -163,10 +163,10 @@ export function youtubeVideoId(url: string): string | null {
 
 const MAX_TITLE_CHARS = 300;
 
-/** Pure: a page title fit to send. Empty when blank or when it is just the link. */
+/** Pure: a page title fit to send. Empty when blank or when it is just a link (this one or another form of it). */
 export function cleanTitle(title: string | undefined | null, url: string): string {
 	const t = (title ?? '').trim();
-	if (t === url.trim()) return '';
+	if (t === url.trim() || /^https?:\/\/\S*$/i.test(t)) return '';
 	return t.slice(0, MAX_TITLE_CHARS).trim();
 }
 

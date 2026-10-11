@@ -581,6 +581,9 @@ describe('titles (READ-249)', () => {
 		expect(cleanTitle(long, long)).toBe('');
 		expect(cleanTitle(` ${long} `, long)).toBe('');
 		expect(cleanTitle('y'.repeat(400), long)).toBe('y'.repeat(300));
+		// READ-357: another form of the link (share sheet `youtube.com/...&is=`) is not a title either.
+		expect(cleanTitle('https://youtube.com/watch?v=abc&is=xyz', 'https://www.youtube.com/watch?v=abc')).toBe('');
+		expect(cleanTitle('See https://example.com for more', 'https://a.test/')).toBe('See https://example.com for more');
 	});
 	it('sends the window title when the window text won', async () => {
 		const { deps, provided } = setup({ items: [item(1)], pages: teaserPage, pageTitle: 'Teaser title', fallback: () => full(900), fallbackTitle: 'Window title' });
