@@ -133,6 +133,9 @@ export interface SyncDeps {
 	sleep: (ms: number) => Promise<void>;
 	now: () => number;
 	random?: () => number;
+	// READ-345: true when the signed-in Lazy Reader user is an admin (profiles.role).
+	// Absent means not admin. Only an admin's own press skips Instagram's hour gate.
+	isAdmin?: () => Promise<boolean>;
 }
 
 export const countWords = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0);

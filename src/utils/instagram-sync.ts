@@ -28,6 +28,7 @@ export const IG_CREDIT_WARNING_OVER = 20;
 
 // 'scheduled': a run from the shared clipper schedule, whose own floor is one
 // hour between runs, so Instagram's per-service gate is not applied twice.
+// 'sync' and 'older' are presses; for an admin they skip the hour gate (READ-345).
 export type InstagramRunKind = 'sync' | 'older' | 'scheduled';
 
 export interface InstagramRunResult {
@@ -78,16 +79,30 @@ export function creditWarning(count: number): string | null {
 		: null;
 }
 
+// Fail closed: no check wired, or the check failed, counts as not admin. A
+// failure is logged, not swallowed, so a broken check shows in the console.
+async function adminPress(deps: SyncDeps): Promise<boolean> {
+	if (!deps.isAdmin) return false;
+	try { return (await deps.isAdmin()) === true; }
+	catch (e) { console.warn('Instagram sync: could not check the admin role, keeping the hour limit.', e); return false; }
+}
+
 export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): Promise<InstagramRunResult> {
 	const out: InstagramRunResult = { sent: 0, username: null, stopped: null, message: null };
 	const state = await loadState(deps.store, 'instagram');
 	if (!state.enabled) return out;
-	if (state.running && deps.now() - (state.lastAttemptAt ?? 0) < 15 * 60 * 1000) return out;
+	// READ-345: a press (sync, older) comes only after the sequence lock, so no run
+	// is alive in this worker and a stored running flag is a dead run: ignore it
+	// for everyone. A scheduled run still honours it.
+	const manual = kind !== 'scheduled';
+	if (!manual && state.running && deps.now() - (state.lastAttemptAt ?? 0) < 15 * 60 * 1000) return out;
 	// Schedule after schedule: the shared floor already spaces runs an hour apart
-	// (Instagram's start drifts with the jobs before it). Any manual run in
-	// between (Sync now, Load older) keeps Instagram's own one-hour gate.
+	// (Instagram's start drifts with the jobs before it). A press skips the hour
+	// gate for an admin only; any other press keeps it, and a scheduled run soon
+	// after any press waits the hour too (the press still records its attempt).
 	const scheduleOwnsFloor = kind === 'scheduled' && state.lastAttemptScheduled === true;
-	if (!scheduleOwnsFloor && state.lastAttemptAt !== null && deps.now() - state.lastAttemptAt < IG_MIN_INTERVAL_MS) {
+	const bypassHour = manual && (await adminPress(deps));
+	if (!scheduleOwnsFloor && !bypassHour && state.lastAttemptAt !== null && deps.now() - state.lastAttemptAt < IG_MIN_INTERVAL_MS) {
 		out.stopped = 'too-soon';
 		const at = new Date(state.lastAttemptAt + IG_MIN_INTERVAL_MS);
 		const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;

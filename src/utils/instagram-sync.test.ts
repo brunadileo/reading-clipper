@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { instagramSavedAssumed as fixture } from './fixtures/instagram-saved.assumed';
 import { creditWarning, parseAccountPage, parseSavedPosts, runInstagramSync, IG_NEW_LIST_POSTS, IG_PAGE_DELAY_MS } from './instagram-sync';
 import { emptyState } from './sync-core';
@@ -82,16 +82,102 @@ describe('runInstagramSync', () => {
 		expect(fetchFn.calls.filter((u) => u.includes('/feed/saved/'))).toHaveLength(1);
 	});
 
-	it('allows one sync an hour', async () => {
+	const TOO_SOON = (lastAt: number) => {
+		const at = new Date(lastAt + 60 * 60 * 1000);
+		return `Instagram sync runs at most once an hour. Try again after ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}.`;
+	};
+
+	it('a scheduled run 30 min after a manual attempt stops with the too-soon message', async () => {
 		const { deps, fetchFn } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000 }) });
 		(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+		const r = await runInstagramSync(deps, 'scheduled');
+		expect(r.stopped).toBe('too-soon');
+		expect(fetchFn.calls).toEqual([]);
+		expect(r.message).toBe(TOO_SOON(1_000_000));
+		expect(r.message).toMatch(/after \d\d:\d\d\.$/);
+	});
+
+	it('a non-admin press within the hour is still refused with the exact message (no isAdmin wired)', async () => {
+		for (const kind of ['sync', 'older'] as const) {
+			const { deps, fetchFn } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000 }) });
+			(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+			const r = await runInstagramSync(deps, kind);
+			expect(r.stopped).toBe('too-soon');
+			expect(r.message).toBe(TOO_SOON(1_000_000));
+			expect(fetchFn.calls).toEqual([]);
+		}
+	});
+
+	it('a press by a user whose admin check says no is refused', async () => {
+		const { deps, fetchFn } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000 }) });
+		(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+		deps.isAdmin = async () => false;
+		expect((await runInstagramSync(deps, 'sync')).stopped).toBe('too-soon');
+		expect(fetchFn.calls).toEqual([]);
+	});
+
+	it('fails closed when the admin check throws, and logs it', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const { deps, fetchFn } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000 }) });
+		(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+		deps.isAdmin = async () => { throw new Error('profile down'); };
 		const r = await runInstagramSync(deps, 'sync');
 		expect(r.stopped).toBe('too-soon');
 		expect(fetchFn.calls).toEqual([]);
-		const at = new Date(1_000_000 + 60 * 60 * 1000);
-		const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-		expect(r.message).toBe(`Instagram sync runs at most once an hour. Try again after ${hhmm}.`);
-		expect(r.message).toMatch(/after \d\d:\d\d\.$/);
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it('an admin sync 30 min after the last attempt runs and moves the attempt clock', async () => {
+		const { deps, fetchFn, store } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000 }) });
+		const at = 1_000_000 + 30 * 60 * 1000;
+		(deps as any).now = () => at;
+		deps.isAdmin = async () => true;
+		const r = await runInstagramSync(deps, 'sync');
+		expect(r.stopped).toBeNull();
+		expect(fetchFn.calls.length).toBeGreaterThan(0);
+		expect(store.data['sync:instagram'].lastAttemptAt).toBe(at);
+		expect(store.data['sync:instagram'].lastAttemptScheduled).toBe(false);
+	});
+
+	it('an admin Load older 30 min after the last attempt runs', async () => {
+		const { deps, fetchFn } = makeDeps({ route: igRoute(30), store: enabled({ lastAttemptAt: 1_000_000, olderCursor: 'm1' }) });
+		(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+		deps.isAdmin = async () => true;
+		const r = await runInstagramSync(deps, 'older');
+		expect(r.stopped).toBeNull();
+		expect(fetchFn.calls.some((u) => u.includes('/feed/saved/'))).toBe(true);
+	});
+
+	it('an admin check is not asked for a scheduled run, which never bypasses', async () => {
+		const { deps } = makeDeps({ route: igRoute(5), store: enabled({ lastAttemptAt: 1_000_000, lastAttemptScheduled: false }) });
+		(deps as any).now = () => 1_000_000 + 30 * 60 * 1000;
+		let asked = 0;
+		deps.isAdmin = async () => { asked++; return true; };
+		expect((await runInstagramSync(deps, 'scheduled')).stopped).toBe('too-soon');
+		expect(asked).toBe(0);
+	});
+
+	it('a press ignores a stored running flag from a dead run, for a non-admin too; a scheduled run does not', async () => {
+		const state = { running: true, lastAttemptAt: 1_000_000 - 5 * 60 * 1000 };
+		const press = makeDeps({ route: igRoute(5), store: enabled(state) });
+		(press.deps as any).now = () => 1_000_000;
+		// Non-admin and the attempt is 5 min old: the hour gate still applies, but the running flag does not return the silent empty result.
+		const r = await runInstagramSync(press.deps, 'sync');
+		expect(r.stopped).toBe('too-soon');
+		expect(r.message).not.toBeNull();
+
+		const adminPress = makeDeps({ route: igRoute(5), store: enabled(state) });
+		(adminPress.deps as any).now = () => 1_000_000;
+		adminPress.deps.isAdmin = async () => true;
+		const a = await runInstagramSync(adminPress.deps, 'sync');
+		expect(a.stopped).toBeNull();
+		expect(adminPress.fetchFn.calls.length).toBeGreaterThan(0);
+
+		const sched = makeDeps({ route: igRoute(5), store: enabled(state) });
+		(sched.deps as any).now = () => 1_000_000;
+		expect(await runInstagramSync(sched.deps, 'scheduled')).toEqual({ sent: 0, username: null, stopped: null, message: null });
+		expect(sched.fetchFn.calls).toEqual([]);
 	});
 
 	it('a scheduled run after a scheduled run leaves the hourly floor to the shared schedule', async () => {
