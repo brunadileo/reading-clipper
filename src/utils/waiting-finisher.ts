@@ -163,10 +163,10 @@ export function youtubeVideoId(url: string): string | null {
 
 const MAX_TITLE_CHARS = 300;
 
-/** Pure: a page title fit to send. Empty when blank or when it is just the link. */
+/** Pure: a page title fit to send. Empty when blank or when it is just a link (this one or another form of it). */
 export function cleanTitle(title: string | undefined | null, url: string): string {
 	const t = (title ?? '').trim();
-	if (t === url.trim()) return '';
+	if (t === url.trim() || /^https?:\/\/\S*$/i.test(t)) return '';
 	return t.slice(0, MAX_TITLE_CHARS).trim();
 }
 
@@ -268,11 +268,15 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 				if (!giveUp) {
 					const videoId = youtubeVideoId(item.url);
 					let text: string | null = null;
+					let videoTitle = '';
+					let channel = '';
 					let definite = true;
 					if (videoId) {
 						try {
 							const t = await deps.readTranscript!(videoId);
 							text = t.text;
+							videoTitle = cleanTitle(t.title, item.url);
+							channel = (t.author ?? '').trim();
 							if (t.blocked) { definite = false; transcriptsOff = true; result.transcriptsBlocked = true; }
 							else if (t.transient) definite = false;
 						} catch {
@@ -291,7 +295,7 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 						}
 					}
 					if (text) {
-						await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text)));
+						await settle(item.id, await deps.api.provideText(item.id, fitReadingText(text), videoTitle, channel || undefined));
 						await saveFinishState(deps.store, state);
 						continue;
 					}

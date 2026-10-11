@@ -33,11 +33,11 @@ function setup(opts: {
 	const store = memoryStore(opts.state ? { [FINISH_KEY]: { ...emptyFinishState(), ...opts.state } } : {});
 	const fetched: string[] = [];
 	const opened: string[] = [];
-	const provided: Array<{ id: string; text?: string; title?: string; outcome?: string }> = [];
+	const provided: Array<{ id: string; text?: string; title?: string; publisher?: string; outcome?: string }> = [];
 	let t = 10_000_000;
 	const api: WaitingApi = {
 		list: async () => ({ ok: opts.list?.ok ?? true, status: opts.list?.status ?? 200, items: opts.items ?? [] }),
-		provideText: async (id, text, title) => { provided.push({ id, text, title: title || undefined }); return opts.provide?.(id, text) ?? { ok: true, status: 200 }; },
+		provideText: async (id, text, title, publisher) => { provided.push({ id, text, title: title || undefined, ...(publisher ? { publisher } : {}) }); return opts.provide?.(id, text) ?? { ok: true, status: 200 }; },
 		markUnreadable: async (id) => { provided.push({ id, outcome: 'unreadable' }); return opts.provide?.(id) ?? { ok: true, status: 200 }; },
 	};
 	const transcriptCalls: string[] = [];
@@ -403,6 +403,28 @@ describe('needs_transcript items (READ-38)', () => {
 		expect(r.finished).toBe(2);
 	});
 
+	it('READ-357: the video title and channel reach provideText', async () => {
+		const { deps, provided } = setup({
+			items: [video(1)],
+			transcript: () => ({ text: `## Transcript\n\n${words}`, blocked: false, title: '  A real title  ', author: ' Some channel ' }),
+		});
+		await runFinisher(deps, 'now');
+		expect(provided).toEqual([{ id: 'v1', text: `## Transcript\n\n${words}`, title: 'A real title', publisher: 'Some channel' }]);
+	});
+
+	it('READ-357: a title that is the link, blank, or missing is not sent; the channel still is', async () => {
+		const url = video(1).url;
+		for (const title of [url, '   ', undefined]) {
+			const { deps, provided } = setup({ items: [video(1)], transcript: () => ({ text: `## Transcript\n\n${words}`, blocked: false, title, author: 'Chan' }) });
+			await runFinisher(deps, 'now');
+			expect(provided).toEqual([{ id: 'v1', text: `## Transcript\n\n${words}`, publisher: 'Chan' }]);
+		}
+		const { deps, provided } = setup({ items: [video(1)], transcript: () => ({ text: `## Transcript\n\n${words}`, blocked: false, title: 'x'.repeat(500) }) });
+		await runFinisher(deps, 'now');
+		expect(provided[0].title).toHaveLength(300);
+		expect(provided[0].publisher).toBeUndefined();
+	});
+
 	it('a video with no transcript counts an attempt and stays waiting', async () => {
 		const { deps, provided, store } = setup({ items: [video(1)] });
 		const r = await runFinisher(deps, 'now');
@@ -559,6 +581,9 @@ describe('titles (READ-249)', () => {
 		expect(cleanTitle(long, long)).toBe('');
 		expect(cleanTitle(` ${long} `, long)).toBe('');
 		expect(cleanTitle('y'.repeat(400), long)).toBe('y'.repeat(300));
+		// READ-357: another form of the link (share sheet `youtube.com/...&is=`) is not a title either.
+		expect(cleanTitle('https://youtube.com/watch?v=abc&is=xyz', 'https://www.youtube.com/watch?v=abc')).toBe('');
+		expect(cleanTitle('See https://example.com for more', 'https://a.test/')).toBe('See https://example.com for more');
 	});
 	it('sends the window title when the window text won', async () => {
 		const { deps, provided } = setup({ items: [item(1)], pages: teaserPage, pageTitle: 'Teaser title', fallback: () => full(900), fallbackTitle: 'Window title' });
@@ -602,6 +627,21 @@ describe('provideText request (READ-249)', () => {
 		expect(await call('')).toEqual({ item_id: 'i1', text: 'body' });
 		expect(await call('  ')).toEqual({ item_id: 'i1', text: 'body' });
 		expect(await call()).toEqual({ item_id: 'i1', text: 'body' });
+	});
+});
+
+describe('provideText publisher (READ-357)', () => {
+	const call = async (title?: string, publisher?: string) => {
+		let body: any;
+		const fetchFn = (async (_u: any, init: any) => { body = JSON.parse(init.body); return { ok: true, status: 200, json: async () => ({}) }; }) as unknown as typeof fetch;
+		await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).provideText('i1', 'body', title, publisher);
+		return body;
+	};
+	it('sends publisher only when non-blank, trimmed', async () => {
+		expect(await call('T', ' Chan ')).toEqual({ item_id: 'i1', text: 'body', title: 'T', publisher: 'Chan' });
+		expect(await call('', 'Chan')).toEqual({ item_id: 'i1', text: 'body', publisher: 'Chan' });
+		expect(await call('T', '  ')).toEqual({ item_id: 'i1', text: 'body', title: 'T' });
+		expect(await call('T')).toEqual({ item_id: 'i1', text: 'body', title: 'T' });
 	});
 });
 

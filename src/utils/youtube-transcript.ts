@@ -233,7 +233,15 @@ export async function readYouTubeTranscript(fetchFn: typeof fetch, videoId: stri
 					continue;
 				}
 				if (countWords(transcript) < MIN_TRANSCRIPT_WORDS) return { text: null, blocked: false };
-				return { text: buildTranscriptMarkdown(String(data?.videoDetails?.shortDescription ?? ''), transcript), blocked: false };
+				const vd = data?.videoDetails;
+				const title = typeof vd?.title === 'string' ? vd.title.trim() : '';
+				const author = typeof vd?.author === 'string' ? vd.author.trim() : '';
+				return {
+					text: buildTranscriptMarkdown(String(vd?.shortDescription ?? ''), transcript),
+					blocked: false,
+					...(title ? { title } : {}),
+					...(author ? { author } : {}),
+				};
 			} catch (e) {
 				if (e instanceof Blocked) throw e;
 				// This client failed (timeout, network, bad JSON): try the next.
