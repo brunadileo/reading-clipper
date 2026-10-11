@@ -1,3 +1,4 @@
+import { expandShortenedLinks } from './expand-short-links';
 import Defuddle from 'defuddle/full';
 import { setElementHTML } from './dom-utils';
 
@@ -15,7 +16,15 @@ export function parseForClip(doc: Document) {
 				...Array.from(readerArticle.childNodes).map(n => readerDoc.importNode(n, true))
 			);
 		}
+		// READ-358: the throwaway reader copy too; it is not the page, so nothing to undo.
+		expandShortenedLinks(readerDoc, doc.URL);
 		return new Defuddle(readerDoc, { url: '' }).parse();
 	}
-	return new Defuddle(doc, { url: doc.URL }).parse();
+	// READ-358: X cuts long links with an ellipsis; show the full address for the parse.
+	const restoreLinks = expandShortenedLinks(doc, doc.URL);
+	try {
+		return new Defuddle(doc, { url: doc.URL }).parse();
+	} finally {
+		restoreLinks();
+	}
 }
