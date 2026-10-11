@@ -18,7 +18,7 @@ import { initializeInterpreter, handleInterpreterUI, collectPromptVariables } fr
 import { adjustNoteNameHeight } from '../utils/ui-utils';
 import { debugLog, isDebugMode } from '../utils/debug';
 import { showVariables, initializeVariablesPanel, updateVariablesPanel } from '../managers/inspect-variables';
-import { isBlankPage, isValidUrl, isRestrictedUrl } from '../utils/active-tab-manager';
+import { isBlankPage, isValidUrl, isRestrictedUrl, isLazyReaderUrl } from '../utils/active-tab-manager';
 import { memoizeWithExpiration } from '../utils/memoize';
 import { debounce } from '../utils/debounce';
 import { sanitizeFileName } from '../utils/string-utils';
@@ -205,6 +205,10 @@ async function initializeExtension(tabId: number) {
 			showError('pageCannotBeClipped');
 			return;
 		}
+		if (isLazyReaderUrl(tab.url)) {
+			showError('onLazyReader');
+			return;
+		}
 
 		// Setup message listeners
 		setupMessageListeners();
@@ -258,6 +262,8 @@ function setupMessageListeners() {
 				currentTabId = request.tabId;
 				if (request.isRestrictedUrl) {
 					showError('pageCannotBeClipped');
+				} else if (isLazyReaderUrl(request.url)) {
+					showError('onLazyReader');
 				} else if (request.isValidUrl) {
 					if (currentTabId !== undefined) {
 						refreshFields(currentTabId); // Force template check when URL changes
@@ -672,6 +678,10 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 		}
 		if (isRestrictedUrl(tab.url)) {
 			showError('pageCannotBeClipped');
+			return;
+		}
+		if (isLazyReaderUrl(tab.url)) {
+			showError('onLazyReader');
 			return;
 		}
 
