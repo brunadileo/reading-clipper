@@ -17,6 +17,9 @@ export const IG_LIST_URL = 'https://www.instagram.com/api/v1/feed/saved/posts/';
 export const IG_ACCOUNT_URL = 'https://www.instagram.com/accounts/edit/';
 export const IG_APP_ID = '936619743392459';
 export const IG_FIRST_RUN_POSTS = 100;
+// READ-341: a list with no known post (account switch, wiped history, a burst
+// of saves) sends this many of its newest posts; Load older brings the rest.
+export const IG_NEW_LIST_POSTS = 20;
 export const IG_PAGE_DELAY_MS = 3000;
 export const IG_SEND_GAP_MS = 1000;
 export const IG_STOP_AFTER_KNOWN = 3;
@@ -86,7 +89,9 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 	const scheduleOwnsFloor = kind === 'scheduled' && state.lastAttemptScheduled === true;
 	if (!scheduleOwnsFloor && state.lastAttemptAt !== null && deps.now() - state.lastAttemptAt < IG_MIN_INTERVAL_MS) {
 		out.stopped = 'too-soon';
-		out.message = 'Instagram sync runs at most once an hour. Try again later.';
+		const at = new Date(state.lastAttemptAt + IG_MIN_INTERVAL_MS);
+		const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+		out.message = `Instagram sync runs at most once an hour. Try again after ${hhmm}.`;
 		return out;
 	}
 	const previousAttempt = state.lastAttemptAt;
@@ -122,11 +127,16 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 		if (isOlder && state.olderExhausted) return await finish(null, 'No older saves left.');
 
 		let cursor: string | null = isOlder ? state.olderCursor : null;
-		const target = isOlder || firstRun ? IG_FIRST_RUN_POSTS : Infinity;
-		const found: SyncPost[] = [];
+		// Posts to take this run: 100 for a first or older run; on a sync, 20 until
+		// a known post shows up in the list, then no limit (3 known in a row stops).
+		let sawKnown = false;
+		const limit = () => (isOlder || firstRun ? IG_FIRST_RUN_POSTS : sawKnown ? Infinity : IG_NEW_LIST_POSTS);
+		let total = 0;
 		let knownRun = 0;
 		let first = true;
+		let firstSend = true;
 		let exhausted = false;
+		let capped = false;
 		for (;;) {
 			if (!first) await deps.sleep(IG_PAGE_DELAY_MS);
 			first = false;
@@ -143,37 +153,43 @@ export async function runInstagramSync(deps: SyncDeps, kind: InstagramRunKind): 
 			const page = parseSavedPosts(json);
 			let stop = false;
 			let used = 0;
+			const pageFound: SyncPost[] = [];
 			for (const p of page.posts) {
 				used++;
 				if (known.has(p.id)) {
+					sawKnown = true;
 					knownRun++;
 					// Later syncs stop after 3 known links in a row (newest first).
 					if (!isOlder && !firstRun && knownRun >= IG_STOP_AFTER_KNOWN) { stop = true; break; }
 					continue;
 				}
 				knownRun = 0;
-				found.push(p);
-				if (found.length >= target) break;
+				pageFound.push(p);
+				total++;
+				if (total >= limit()) { capped = true; break; }
 			}
+
+			// READ-341: send this page now, so a run that is cut off keeps what it read.
+			for (const post of pageFound) {
+				if (!firstSend) await deps.sleep(IG_SEND_GAP_MS);
+				firstSend = false;
+				const sent = await sendWithRetry(deps, post, undefined);
+				if (sent.status === 401) return await finish('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
+				if (!sent.ok) return await finish('error', sent.error || `Lazy Reader answered ${sent.status ?? 'nothing'}`);
+				out.sent++;
+				state.knownIds.push(post.id);
+			}
+			if (pageFound.length) await saveState(deps.store, 'instagram', state);
+
 			// Stopped inside a page at the limit: keep the cursor on this page, so
 			// Load older fetches it again and the known ids skip what was sent.
-			if (found.length >= target && used < page.posts.length) break;
+			if (capped && used < page.posts.length) break;
 			cursor = page.nextMaxId;
 			if (!cursor) { exhausted = true; break; }
-			if (stop || found.length >= target) break;
+			if (stop || capped) break;
 		}
-
-		let first2 = true;
-		for (const post of found) {
-			if (!first2) await deps.sleep(IG_SEND_GAP_MS);
-			first2 = false;
-			const sent = await sendWithRetry(deps, post, undefined);
-			if (sent.status === 401) return await finish('token', 'Lazy Reader did not accept the token. Copy it again from Lazy Reader, Settings.');
-			if (!sent.ok) return await finish('error', sent.error || `Lazy Reader answered ${sent.status ?? 'nothing'}`);
-			out.sent++;
-			state.knownIds.push(post.id);
-		}
-		if (isOlder || firstRun) {
+		// A sync that hit the new-list limit hands the rest to Load older.
+		if (isOlder || firstRun || (capped && !sawKnown)) {
 			state.olderCursor = cursor;
 			state.olderExhausted = exhausted;
 		}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { instagramSavedAssumed as fixture } from './fixtures/instagram-saved.assumed';
-import { creditWarning, parseAccountPage, parseSavedPosts, runInstagramSync, IG_PAGE_DELAY_MS } from './instagram-sync';
+import { creditWarning, parseAccountPage, parseSavedPosts, runInstagramSync, IG_NEW_LIST_POSTS, IG_PAGE_DELAY_MS } from './instagram-sync';
 import { emptyState } from './sync-core';
 import { makeDeps, memoryStore, type Route } from './sync-test-helpers';
 
@@ -88,6 +88,10 @@ describe('runInstagramSync', () => {
 		const r = await runInstagramSync(deps, 'sync');
 		expect(r.stopped).toBe('too-soon');
 		expect(fetchFn.calls).toEqual([]);
+		const at = new Date(1_000_000 + 60 * 60 * 1000);
+		const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+		expect(r.message).toBe(`Instagram sync runs at most once an hour. Try again after ${hhmm}.`);
+		expect(r.message).toMatch(/after \d\d:\d\d\.$/);
 	});
 
 	it('a scheduled run after a scheduled run leaves the hourly floor to the shared schedule', async () => {
@@ -148,5 +152,83 @@ describe('runInstagramSync', () => {
 		expect(r.sent).toBe(1);
 		expect(sent).toHaveLength(2);
 		expect(sleeps).toContain(3000);
+	});
+});
+
+describe('READ-341: a list with no known post', () => {
+	const oldKnown = Array.from({ length: 108 }, (_, i) => `old${i}`);
+	const later = (deps: any) => { deps.now = () => 10 * 60 * 60 * 1000; };
+
+	it('sends exactly the newest 20, saves the cursor after post 20 and fetches no further page', async () => {
+		const { deps, store, sent, fetchFn } = makeDeps({ route: igRoute(30), store: enabled({ knownIds: oldKnown, lastSuccess: 5, lastAttemptAt: 0 }) });
+		later(deps);
+		const r = await runInstagramSync(deps, 'sync');
+		expect(IG_NEW_LIST_POSTS).toBe(20);
+		expect(r.stopped).toBeNull();
+		expect(sent.map((s) => s.id)).toEqual(Array.from({ length: 20 }, (_, i) => `s${i}`));
+		expect(fetchFn.calls.filter((u) => u.includes('/feed/saved/'))).toHaveLength(2);
+		const st = store.data['sync:instagram'];
+		expect(st.olderCursor).toBe('m2');
+		expect(st.olderExhausted).toBe(false);
+		expect(st.knownIds).toHaveLength(128);
+		expect(st.knownIds.slice(-20)).toEqual(sent.map((s) => s.id));
+	});
+
+	it('a list shorter than 20 sends all of it and leaves the older cursor alone', async () => {
+		const { deps, store, sent } = makeDeps({ route: igRoute(7), store: enabled({ knownIds: oldKnown, lastSuccess: 5, lastAttemptAt: 0 }) });
+		later(deps);
+		await runInstagramSync(deps, 'sync');
+		expect(sent).toHaveLength(7);
+		expect(store.data['sync:instagram'].olderCursor).toBeNull();
+	});
+
+	it('the 20 sent ids survive the known-id trim as the newest', async () => {
+		const full = Array.from({ length: 5000 }, (_, i) => `old${i}`);
+		const { deps, store, sent } = makeDeps({ route: igRoute(30), store: enabled({ knownIds: full, lastSuccess: 5, lastAttemptAt: 0 }) });
+		later(deps);
+		await runInstagramSync(deps, 'scheduled');
+		const ids = store.data['sync:instagram'].knownIds;
+		expect(ids).toHaveLength(5000);
+		expect(ids.slice(-20)).toEqual(sent.map((s) => s.id));
+	});
+
+	it('a send that fails on page 2 keeps page 1 in the saved known ids', async () => {
+		const sends = Array.from({ length: 10 }, () => ({ ok: true, status: 200 }));
+		sends.push({ ok: false, status: 400 });
+		const { deps, store } = makeDeps({ route: igRoute(30), store: enabled({ knownIds: oldKnown, lastSuccess: 5, lastAttemptAt: 0 }), sends });
+		later(deps);
+		const r = await runInstagramSync(deps, 'sync');
+		expect(r.stopped).toBe('error');
+		expect(r.sent).toBe(10);
+		const st = store.data['sync:instagram'];
+		expect(st.knownIds.slice(-10)).toEqual(Array.from({ length: 10 }, (_, i) => `s${i}`));
+		expect(st.knownIds).not.toContain('s10');
+		expect(st.running).toBe(false);
+	});
+
+	it('page 1 is saved before page 2 is fetched', async () => {
+		let seen: string[] | null = null;
+		const store = enabled({ knownIds: oldKnown, lastSuccess: 5, lastAttemptAt: 0 });
+		const inner = igRoute(30);
+		const route: Route = (url, init) => {
+			if (url.includes('max_id=m1')) seen = store.data['sync:instagram'].knownIds.slice(-10);
+			return inner(url, init);
+		};
+		const { deps } = makeDeps({ route, store });
+		later(deps);
+		await runInstagramSync(deps, 'sync');
+		expect(seen).toEqual(Array.from({ length: 10 }, (_, i) => `s${i}`));
+	});
+
+	it('first run still caps at 100 and a later sync that meets known posts keeps its cursor alone', async () => {
+		const first = makeDeps({ route: igRoute(250), store: enabled() });
+		const r = await runInstagramSync(first.deps, 'sync');
+		expect(r.sent).toBe(100);
+		const known = ['s5', 's6', 's7'];
+		const more = makeDeps({ route: igRoute(250), store: enabled({ knownIds: known, lastSuccess: 5, lastAttemptAt: 0 }) });
+		later(more.deps);
+		const r2 = await runInstagramSync(more.deps, 'sync');
+		expect(r2.sent).toBe(5);
+		expect(more.store.data['sync:instagram'].olderCursor).toBeNull();
 	});
 });
