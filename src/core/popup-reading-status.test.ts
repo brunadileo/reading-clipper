@@ -93,3 +93,28 @@ describe('auto-close after a save (READ-236)', () => {
 		expect(window.close).not.toHaveBeenCalled();
 	});
 });
+
+describe('reading note cap in code points (READ-399)', () => {
+	it('capReadingNote keeps 10,000 emoji and cuts the rest, never splitting a pair', async () => {
+		const { capReadingNote } = await import('./popup');
+		expect(capReadingNote('')).toBe('');
+		expect(capReadingNote(undefined as unknown as string)).toBe('');
+		expect(capReadingNote('<script>é</script>')).toBe('<script>é</script>');
+		const ok = '😀'.repeat(10000);
+		expect(capReadingNote(ok)).toBe(ok);
+		const cut = capReadingNote('😀'.repeat(10005));
+		expect(Array.from(cut)).toHaveLength(10000);
+		expect(cut).toBe(ok);
+	});
+
+	it('typing past the cap trims the textarea and keeps the caret in range', async () => {
+		document.body.innerHTML = '<textarea id="reading-note"></textarea>';
+		const { wireReadingNoteCap } = await import('./popup');
+		wireReadingNoteCap();
+		const t = document.getElementById('reading-note') as HTMLTextAreaElement;
+		t.value = '😀'.repeat(10003);
+		t.dispatchEvent(new Event('input'));
+		expect(Array.from(t.value)).toHaveLength(10000);
+		expect(t.selectionStart).toBeLessThanOrEqual(t.value.length);
+	});
+});

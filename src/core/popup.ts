@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import { Template, Property, PromptVariable } from '../types/types';
 import { incrementStat, addHistoryEntry, getClipHistory } from '../utils/storage-utils';
 import { generateFrontmatter } from '../utils/obsidian-note-creator';
-import { buildReadingCaptureBody, sendToReading, READING_TEXT_CUT_NOTE } from '../utils/reading-sender';
+import { buildReadingCaptureBody, sendToReading, READING_TEXT_CUT_NOTE, MAX_READING_NOTE_CHARS } from '../utils/reading-sender';
 import { extractPageContent, initializePageContent } from '../utils/content-extractor';
 import { compileTemplate } from '../utils/template-compiler';
 import { initializeIcons, getPropertyTypeIcon } from '../icons/icons';
@@ -291,6 +291,7 @@ function setupMessageListeners() {
 
 document.addEventListener('DOMContentLoaded', async function() {
 	loadedSettings = await loadSettings();
+	wireReadingNoteCap();
 	if (isIframe) {
 		document.documentElement.classList.add('is-embedded');
 	}
@@ -1348,6 +1349,24 @@ async function refreshContentWithScroll(noteContentField: HTMLTextAreaElement, n
 	}
 }
 
+// The server counts the note in code points, so the popup does too. A native
+// maxlength counts UTF-16 units and would stop 5,000 emoji (READ-399).
+export function capReadingNote(value: string): string {
+	const chars = Array.from(value || '');
+	return chars.length > MAX_READING_NOTE_CHARS ? chars.slice(0, MAX_READING_NOTE_CHARS).join('') : value || '';
+}
+
+export function wireReadingNoteCap(): void {
+	const field = document.getElementById('reading-note') as HTMLTextAreaElement | null;
+	field?.addEventListener('input', () => {
+		const capped = capReadingNote(field.value);
+		if (capped === field.value) return;
+		const caret = Math.min(field.selectionStart ?? capped.length, capped.length);
+		field.value = capped;
+		field.setSelectionRange(caret, caret);
+	});
+}
+
 const AUTO_CLOSE_MS = 1500;
 
 // The popup closes itself after a save, unless the pointer or focus reaches the
@@ -1403,7 +1422,7 @@ async function handleClipObsidian(): Promise<void> {
 			siteName: currentVariables['{{site}}'] || '',
 			text: noteContentField.value,
 			via: 'chrome-clipper',
-			note: (document.getElementById('reading-note') as HTMLTextAreaElement | null)?.value,
+			note: capReadingNote((document.getElementById('reading-note') as HTMLTextAreaElement | null)?.value ?? ''),
 		});
 
 		const readingSettings = await loadReadingSettings();
