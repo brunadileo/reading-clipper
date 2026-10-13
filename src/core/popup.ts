@@ -1403,6 +1403,7 @@ async function handleClipObsidian(): Promise<void> {
 			siteName: currentVariables['{{site}}'] || '',
 			text: noteContentField.value,
 			via: 'chrome-clipper',
+			note: (document.getElementById('reading-note') as HTMLTextAreaElement | null)?.value,
 		});
 
 		const readingSettings = await loadReadingSettings();

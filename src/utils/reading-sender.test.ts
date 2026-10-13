@@ -54,6 +54,40 @@ describe('buildReadingCaptureBody', () => {
 	});
 });
 
+describe('buildReadingCaptureBody note (READ-399)', () => {
+	const base = { url: 'https://example.com/a', title: 'T', siteName: 'S', text: 'body' };
+
+	it('sends the note as typed, line breaks kept', () => {
+		expect(buildReadingCaptureBody({ ...base, note: 'line one\n\nline two' }).note).toBe('line one\n\nline two');
+	});
+
+	it('leaves the note out when missing, empty, whitespace or not a string', () => {
+		expect(buildReadingCaptureBody(base)).not.toHaveProperty('note');
+		expect(buildReadingCaptureBody({ ...base, note: undefined })).not.toHaveProperty('note');
+		expect(buildReadingCaptureBody({ ...base, note: '' })).not.toHaveProperty('note');
+		expect(buildReadingCaptureBody({ ...base, note: ' \n\t ' })).not.toHaveProperty('note');
+		expect(buildReadingCaptureBody({ ...base, note: 5 as unknown as string })).not.toHaveProperty('note');
+		expect(buildReadingCaptureBody({ ...base, note: null as unknown as string })).not.toHaveProperty('note');
+	});
+
+	it('keeps 10,000 characters and cuts the 10,001st, counting emoji as one', () => {
+		expect(buildReadingCaptureBody({ ...base, note: 'a'.repeat(10000) }).note).toHaveLength(10000);
+		expect(buildReadingCaptureBody({ ...base, note: 'a'.repeat(10001) }).note).toHaveLength(10000);
+		const emoji = buildReadingCaptureBody({ ...base, note: '\u{1F600}'.repeat(10001) }).note!;
+		expect(Array.from(emoji)).toHaveLength(10000);
+	});
+
+	it('passes unicode and markup through as plain text', () => {
+		const note = '<script>alert(1)</script> caf\u00e9 \u65e5\u672c\u8a9e';
+		expect(buildReadingCaptureBody({ ...base, note }).note).toBe(note);
+	});
+
+	it('does not touch the other fields', () => {
+		const body = buildReadingCaptureBody({ ...base, note: 'n', via: 'chrome-clipper' });
+		expect(body).toEqual({ url: base.url, title: 'T', site_name: 'S', text: 'body', via: 'chrome-clipper', note: 'n' });
+	});
+});
+
 describe('fitReadingText', () => {
 	const bytes = (s: string) => new TextEncoder().encode(s).length;
 

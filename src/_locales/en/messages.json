@@ -950,6 +950,12 @@
 	"savedToReading": {
 		"message": "Saved to Lazy Reader"
 	},
+	"readingNoteLabel": {
+		"message": "Note (optional)"
+	},
+	"readingNotePlaceholder": {
+		"message": "Why you saved it"
+	},
 	"savingToReading": {
 		"message": "Saving to Lazy Reader…"
 	},

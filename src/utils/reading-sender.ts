@@ -15,6 +15,9 @@ export interface ReadingCaptureBody {
 	// READ-200: the channel, shown on the item page. The server keeps only the
 	// four values it allows a token client to name and stores 'token' otherwise.
 	via?: ReadingVia;
+	// READ-399: the reader's own note. Left out when empty. The server keeps up
+	// to 10,000 characters and appends it under an older note on a re-save.
+	note?: string;
 }
 
 export type ReadingVia = 'chrome-clipper' | 'substack-saved' | 'instagram-saved' | 'medium-saved';
@@ -26,7 +29,10 @@ export interface BuildReadingCaptureBodyParams {
 	text: string;
 	source?: 'substack' | 'instagram' | 'youtube' | 'medium';
 	via?: ReadingVia;
+	note?: string;
 }
+
+export const MAX_READING_NOTE_CHARS = 10000;
 
 // The new home (READ-18) stores full text as a file and caps it at 96,000
 // words. 500,000 bytes stays under that for any language and still fits one
@@ -78,6 +84,12 @@ export function buildReadingCaptureBody(params: BuildReadingCaptureBodyParams): 
 
 	if (params.source) body.source = params.source;
 	if (params.via) body.via = params.via;
+
+	// Only a non-empty string goes out; the box is capped at 10,000 characters
+	// and the server cuts there too. Line breaks are kept as typed.
+	if (typeof params.note === 'string' && params.note.trim().length > 0) {
+		body.note = Array.from(params.note).slice(0, MAX_READING_NOTE_CHARS).join('');
+	}
 
 	// The caller passes the note body, which never holds frontmatter, so the
 	// text is sent as-is. An article that opens with a "---" rule stays whole.

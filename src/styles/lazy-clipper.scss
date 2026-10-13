@@ -101,6 +101,15 @@
 		}
 	}
 
+	// READ-399: the optional note. Three rows, grows to eight, then scrolls.
+	#reading-note {
+		resize: none;
+		field-sizing: content;
+		min-height: calc(var(--text-base-lh) * 3 + 20px);
+		max-height: calc(var(--text-base-lh) * 8 + 20px);
+		overflow-y: auto;
+	}
+
 	// Save.
 	#clip-btn {
 		width: 100%;
