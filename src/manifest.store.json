@@ -5,7 +5,7 @@
 	"name": "Lazy Reader: Read Later Clipper with AI Summaries",
 	"short_name": "Lazy Reader Clipper",
 	"homepage_url": "https://lazyreader.app",
-	"version": "1.15.2",
+	"version": "1.15.3",
 	"description": "Save pages in one click, including paywalled ones you're signed in to. A summary arrives a minute later.",
 	"permissions": [
 		"activeTab",
