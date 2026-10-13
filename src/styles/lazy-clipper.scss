@@ -101,13 +101,40 @@
 		}
 	}
 
-	// READ-399: the optional note. Three rows, grows to eight, then scrolls.
+	// READ-399: the optional note, same look as the web app's: a sage box (--lr-note-bg / --lr-note-ink), radius 12,
+	// padding 10x12, Handlee 17px (Handlee only, no setting here). Three rows, grows to eight, then scrolls.
+	#reading-note-field {
+		background-color: hsl(var(--lr-note-bg));
+		border-radius: 12px;
+		padding: 10px 12px;
+		gap: 4px;
+		.lr-label {
+			color: hsl(var(--lr-note-ink));
+		}
+	}
 	#reading-note {
 		resize: none;
 		field-sizing: content;
-		min-height: calc(var(--text-base-lh) * 3 + 20px);
-		max-height: calc(var(--text-base-lh) * 8 + 20px);
+		font-family: 'Handlee', cursive;
+		font-size: 17px;
+		line-height: 1.45;
+		color: hsl(var(--lr-note-ink));
+		background-color: transparent;
+		border: 0;
+		padding: 0;
+		box-shadow: none;
+		min-height: calc(17px * 1.45 * 3);
+		max-height: calc(17px * 1.45 * 8);
 		overflow-y: auto;
+		&::placeholder {
+			color: hsl(var(--lr-note-ink) / 0.6);
+		}
+		&:focus,
+		&:focus-visible {
+			outline: none;
+			box-shadow: none;
+			background-color: transparent;
+		}
 	}
 
 	// Save.
