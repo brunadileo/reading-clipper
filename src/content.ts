@@ -231,8 +231,8 @@ declare global {
 					selectedHtml = serializeChildren(div);
 				}
 
-				// Use parseAsync to ensure async variables like {{transcript}} are available (default build only: the store
-				// build turns async extractors off, so no transcript and no third-party fetch, READ-48).
+				// Use parseAsync to ensure async variables like {{transcript}} are available (the store build turns async
+				// extractors off except on YouTube, which reads captions from its own site: no third-party fetch, READ-48, READ-359).
 				// If it hangs (e.g. another extension has corrupted fetch), fall back to sync parse.
 				const defuddle = new Defuddle(document, defuddleOptions(document.URL));
 				const parseTimeout = new Promise<never>((_, reject) =>
