@@ -180,7 +180,7 @@ export async function readFeedInWindow(url: string): Promise<string | null> {
 	}
 }
 
-async function makeDeps(): Promise<FinisherDeps> {
+export async function makeDeps(): Promise<FinisherDeps> {
 	const settings = await loadReadingSettings();
 	return {
 		store,
@@ -195,6 +195,8 @@ async function makeDeps(): Promise<FinisherDeps> {
 		readTranscript: (videoId) => readYouTubeTranscript(fetch, videoId),
 		extractHtml: (html, url) => askOffscreen({ action: 'extractHtml', html, url }),
 		openForExtraction,
+		// READ-414: a followed site's feed behind a bot check.
+		readFeedInWindow,
 		sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 		now: () => Date.now(),
 	};

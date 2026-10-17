@@ -18,7 +18,7 @@ export function isCheckPageTitle(title: string | undefined | null): boolean {
 /** Pure: text that is worth sending (not empty, at most 2 MB). */
 export function feedTextFits(text: string | undefined | null): text is string {
 	if (!text || !text.trim()) return false;
-	// A string can only be 2 MB of bytes if it has at least a third as many characters.
+	// Every character is at least one byte, so a longer string is too big without encoding it.
 	if (text.length > FEED_MAX_BYTES) return false;
 	return new TextEncoder().encode(text).length <= FEED_MAX_BYTES;
 }

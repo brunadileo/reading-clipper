@@ -238,7 +238,11 @@ async function readFeed(deps: FinisherDeps, item: WaitingItem): Promise<boolean>
 		if (text === null) return false;
 		const sent = await deps.api.provideFeedText(item.id, text);
 		guard(sent);
-		if (!sent.ok) return false;
+		if (!sent.ok) {
+			// 404 stays retry-later (EC-13); the status is kept so a 404/409/422 can be traced.
+			console.warn(`Feed text not accepted for ${item.id}: status ${sent.status}`);
+			return false;
+		}
 		if (!sent.needsDevice) return true;
 		url = sent.needsDevice;
 	}
