@@ -848,6 +848,12 @@ describe('feeds of sites that turn the server away (READ-414)', () => {
 		expect(r).toMatchObject({ ok: true, needsDevice: 'https://a.com/feed' });
 	});
 
+	it('provideFeedText: a 200 that carries error is not a read', async () => {
+		const fetchFn = (async () => ({ ok: true, status: 200, json: async () => ({ feed: {}, added: 0, error: 'save failed' }) })) as unknown as typeof fetch;
+		const r = await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).provideFeedText('f1', '<rss/>');
+		expect(r).toMatchObject({ ok: false, status: 200, error: 'save failed' });
+	});
+
 	it('provideFeedText ignores a non-string needs_device and fails without a token', async () => {
 		const json = async () => ({ needs_device: 5 });
 		const fetchFn = (async () => ({ ok: true, status: 200, json })) as unknown as typeof fetch;

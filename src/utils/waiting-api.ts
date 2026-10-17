@@ -125,7 +125,9 @@ export function createWaitingApi(captureUrl: string, token: string, fetchFn: typ
 			if (missing) return bad;
 			const r = await post(fetchFn, provideFeedUrl!, token, { feed_id: feedId, text });
 			const next = r.ok && typeof r.json?.needs_device === 'string' && r.json.needs_device ? r.json.needs_device : undefined;
-			return { ok: r.ok, status: r.status, needsDevice: next, error: r.error };
+			// READ-414: a 200 that carries `error` means the posts did not save; not a read.
+			const saveError = r.ok && typeof r.json?.error === 'string' && r.json.error ? r.json.error : undefined;
+			return { ok: r.ok && !saveError, status: r.status, needsDevice: next, error: r.error ?? saveError };
 		},
 	};
 }
