@@ -71,6 +71,13 @@ describe('real Defuddle with store options (READ-359)', () => {
 		for (const u of calls) expect(u.startsWith('https://www.youtube.com/')).toBe(true);
 	});
 
+	it('keeps every fetch on www.youtube.com when the query string names another extractor host', async () => {
+		const { stub, calls } = makeStub();
+		const url = `${watchUrl}&x=www.bilibili.com/video/BV1abc`;
+		await new Defuddle(watchDoc(), { ...defuddleOptions(url, true), fetch: stub }).parseAsync();
+		for (const u of calls) expect(u.startsWith('https://www.youtube.com/')).toBe(true);
+	});
+
 	it('makes no fetch on an x.com status page with an empty body', async () => {
 		const { stub, calls } = makeStub();
 		const doc = new DOMParser().parseFromString('<html><head></head><body></body></html>', 'text/html');
