@@ -31,6 +31,12 @@ describe('Instagram parsers (assumed shapes)', () => {
 		expect(page.posts[1].title).toBe('Instagram post by @other');
 		expect(page.nextMaxId).toBe('max-2');
 	});
+	it('READ-451: cuts a long caption on whole characters, never half an emoji', () => {
+		const caption = 'a'.repeat(119) + '\u{1F600} tail';
+		const page = parseSavedPosts({ items: [{ media: { code: 'Emo1', caption: { text: caption }, user: { username: 'u' } } }] });
+		expect(page.posts[0].title).toBe('a'.repeat(119) + '\u{1F600}');
+		expect(page.posts[0].title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+	});
 	it('reads username and csrf from the account page', () => {
 		expect(parseAccountPage(ACCOUNT_HTML)).toEqual({ username: 'bruna_test', csrf: 'tok123' });
 		expect(parseAccountPage('<html>login</html>')).toEqual({ username: null, csrf: null });

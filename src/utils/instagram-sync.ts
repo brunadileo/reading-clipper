@@ -51,7 +51,8 @@ export function parseSavedPosts(json: any): IgListPage {
 		const media = it?.media ?? it;
 		const code = media?.code;
 		if (typeof code !== 'string' || !/^[A-Za-z0-9_-]+$/.test(code)) continue;
-		const caption = String(media?.caption?.text ?? '').trim().split('\n')[0].slice(0, 120);
+		// READ-451: cut on whole characters; .slice(0, 120) could split an emoji and the server refused the title.
+		const caption = Array.from(String(media?.caption?.text ?? '').trim().split('\n')[0]).slice(0, 120).join('');
 		const user = String(media?.user?.username ?? '');
 		posts.push({
 			id: code,
