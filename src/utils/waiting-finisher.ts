@@ -4,6 +4,7 @@
 // that listWaiting returned for this user's token (plan choice 17), and never
 // reads, stores or sends a cookie.
 import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
+import { FEED_MAX_ROUNDS, feedTextFits } from './feed-read';
 import { fitReadingText } from './reading-sender';
 import type { ProvideResult, WaitingApi, WaitingItem } from './waiting-api';
 import { countWords, type SyncStore } from './sync-core';
@@ -92,6 +93,9 @@ export interface FinisherDeps {
 	// READ-38: reads a YouTube video's transcript in the browser (no window, no tab).
 	// Omitted: needs_transcript items are left for the phone.
 	readTranscript?: (videoId: string) => Promise<TranscriptRead>;
+	// READ-414: the raw feed text from a minimized window, once the site's bot check has passed.
+	// Null when it never did, or the page could not be opened. Omitted: feeds are read by fetch only.
+	readFeedInWindow?: (url: string) => Promise<string | null>;
 	sleep: (ms: number) => Promise<void>;
 	now: () => number;
 	random?: () => number;
@@ -205,6 +209,43 @@ async function gatherText(deps: FinisherDeps, url: string): Promise<{ text: stri
 	return { text, title: cleanTitle(first, url) || cleanTitle(second, url) };
 }
 
+/**
+ * READ-414: one followed site's feed. Worker fetch first; any answer that is not a
+ * readable 2xx opens the window read. Follows needs_device links, at most 3 rounds.
+ * Returns true when the server took a feed. A failed read costs no attempt: feeds
+ * are not items, so there is nothing to mark unreadable.
+ */
+async function readFeed(deps: FinisherDeps, item: WaitingItem): Promise<boolean> {
+	let url = item.url;
+	for (let round = 0; round < FEED_MAX_ROUNDS; round++) {
+		if (!isSafeFetchUrl(url)) return false;
+		let text: string | null = null;
+		try {
+			const page = await deps.fetchPage(url);
+			if (!isSafeFetchUrl(page.finalUrl || url)) return false;
+			if (page.status >= 200 && page.status < 300 && feedTextFits(page.html)) text = page.html;
+		} catch {
+			text = null;
+		}
+		if (text === null && deps.readFeedInWindow) {
+			try {
+				const read = await deps.readFeedInWindow(url);
+				if (feedTextFits(read)) text = read;
+			} catch {
+				text = null;
+			}
+		}
+		if (text === null) return false;
+		const sent = await deps.api.provideFeedText(item.id, text);
+		guard(sent);
+		if (!sent.ok) return false;
+		if (!sent.needsDevice) return true;
+		url = sent.needsDevice;
+	}
+	// Still being sent elsewhere after 3 rounds: the next run starts again from the server's row.
+	return false;
+}
+
 /** One finish run. Never throws; the outcome goes to state and the result. */
 export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): Promise<FinishResult> {
 	const result: FinishResult = { skipped: null, finished: 0, membersOnly: 0, unreadable: 0, retryLater: 0, transcriptsBlocked: false, stopped: null };
@@ -257,6 +298,14 @@ export async function runFinisher(deps: FinisherDeps, trigger: FinishTrigger): P
 			first = false;
 			// Heartbeat: a long run keeps its lock fresh (stale after 15 min).
 			state.lastAttemptAt = deps.now();
+
+			// READ-414: a followed site's feed. Before the transcript branch; never touches attempts or markUnreadable.
+			if (item.code === 'needs_feed') {
+				state.triedAt[item.id] = deps.now();
+				if (await readFeed(deps, item)) result.finished++; else result.retryLater++;
+				await saveFinishState(deps.store, state);
+				continue;
+			}
 
 			// YouTube: the transcript is read in the browser; the page itself is never fetched.
 			if (item.code === 'needs_transcript') {

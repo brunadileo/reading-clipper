@@ -4,6 +4,7 @@ import browser from './browser-polyfill';
 import { loadReadingSettings } from './storage-utils';
 import { createWaitingApi } from './waiting-api';
 import { isSafeFetchUrl } from './full-text-check';
+import { FEED_WINDOW_CAP_MS, isCheckPageTitle, pickFeedText, type FeedTabSnapshot } from './feed-read';
 import { isOwnPageSender } from './sync-schedule';
 import { readYouTubeTranscript } from './youtube-transcript';
 import { ensureOffscreen, offscreenSupported, releaseOffscreen } from './offscreen-doc';
@@ -130,6 +131,50 @@ async function openForExtraction(url: string): Promise<{ text: string; title: st
 		if (!page || !page.content) return null;
 		const md = await askOffscreen({ action: 'contentToMarkdown', html: page.content, url: tab.url || url });
 		return { text: md.text, title: tab.title || '' };
+	} finally {
+		if (windowId !== undefined) await closeWindow(windowId);
+	}
+}
+
+// READ-414: a followed site's feed in a minimized window, for a site that shows a
+// bot check to a plain fetch. Polls the tab every second until its title is no longer
+// the check page (30 s at most), then reads the raw text; no Defuddle on a feed.
+function snapshotTab(): FeedTabSnapshot {
+	const doc = document;
+	const src = doc.getElementById('webkit-xml-viewer-source-xml');
+	const ser = new XMLSerializer();
+	const kids = doc.body?.children;
+	return {
+		contentType: doc.contentType || '',
+		xmlSource: src ? Array.from(src.childNodes).map((n) => ser.serializeToString(n)).join('') : '',
+		outerHTML: doc.documentElement?.outerHTML || '',
+		bodyText: doc.body?.innerText || doc.documentElement?.textContent || '',
+		preOnly: !!kids && kids.length === 1 && kids[0].tagName === 'PRE',
+	};
+}
+
+export async function readFeedInWindow(url: string): Promise<string | null> {
+	let windowId: number | undefined;
+	try {
+		const win = await browser.windows.create({ url, focused: false, state: 'normal' });
+		windowId = win.id;
+		if (windowId === undefined) return null;
+		try { await session()?.set({ [OPEN_WINDOW_KEY]: windowId }); } catch { /* best effort */ }
+		await browser.windows.update(windowId, { state: 'minimized' });
+		const tabId = win.tabs?.[0]?.id;
+		if (tabId === undefined) return null;
+		const deadline = Date.now() + FEED_WINDOW_CAP_MS;
+		while (Date.now() < deadline) {
+			await new Promise((r) => setTimeout(r, 1000));
+			const tab = await browser.tabs.get(tabId);
+			// The check may have sent the tab somewhere we must not read.
+			if (!isSafeFetchUrl(tab.url || '')) return null;
+			if (tab.status !== 'complete' || isCheckPageTitle(tab.title)) continue;
+			const [res] = await browser.scripting.executeScript({ target: { tabId }, func: snapshotTab });
+			const snap = res?.result as FeedTabSnapshot | undefined;
+			return snap ? pickFeedText(snap) : null;
+		}
+		return null;
 	} finally {
 		if (windowId !== undefined) await closeWindow(windowId);
 	}

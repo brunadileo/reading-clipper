@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { checkFullText, isSafeFetchUrl, pickBestText } from './full-text-check';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createWaitingApi, endpointUrl, parseWaitingItems } from './waiting-api';
+import { FEED_MAX_BYTES, feedTextFits, isCheckPageTitle, pickFeedText } from './feed-read';
 import type { WaitingApi, WaitingItem, ProvideResult } from './waiting-api';
 import {
 	AUTO_LIMIT, AUTO_MIN_GAP_MS, cleanTitle, FINISH_KEY, NOW_LIMIT, emptyFinishState, ITEM_RETRY_MS, pruneAttempts, runFinisher, shouldRun, youtubeVideoId,
@@ -29,6 +32,10 @@ function setup(opts: {
 	noFallback?: boolean;
 	transcript?: (videoId: string) => TranscriptRead | Error;
 	noTranscriptReader?: boolean;
+	// READ-414
+	feedSend?: (id: string, text: string) => ProvideResult;
+	feedWindow?: (url: string) => string | null | Error;
+	noFeedWindow?: boolean;
 }) {
 	const store = memoryStore(opts.state ? { [FINISH_KEY]: { ...emptyFinishState(), ...opts.state } } : {});
 	const fetched: string[] = [];
@@ -39,7 +46,10 @@ function setup(opts: {
 		list: async () => ({ ok: opts.list?.ok ?? true, status: opts.list?.status ?? 200, items: opts.items ?? [] }),
 		provideText: async (id, text, title, publisher) => { provided.push({ id, text, title: title || undefined, ...(publisher ? { publisher } : {}) }); return opts.provide?.(id, text) ?? { ok: true, status: 200 }; },
 		markUnreadable: async (id) => { provided.push({ id, outcome: 'unreadable' }); return opts.provide?.(id) ?? { ok: true, status: 200 }; },
+		provideFeedText: async (id, text) => { feedSent.push({ id, text }); return opts.feedSend?.(id, text) ?? { ok: true, status: 200 }; },
 	};
+	const feedSent: Array<{ id: string; text: string }> = [];
+	const feedWindowCalls: string[] = [];
 	const transcriptCalls: string[] = [];
 	const deps: FinisherDeps = {
 		store, api,
@@ -62,11 +72,17 @@ function setup(opts: {
 			const text = opts.fallback ? opts.fallback(url) : null;
 			return text === null ? null : { text, title: opts.fallbackTitle ?? '' };
 		},
+		readFeedInWindow: opts.noFeedWindow ? undefined : async (url) => {
+			feedWindowCalls.push(url);
+			const r = opts.feedWindow ? opts.feedWindow(url) : null;
+			if (r instanceof Error) throw r;
+			return r;
+		},
 		sleep: async (ms) => { t += ms; },
 		now: () => (t += 1000),
 		random: () => 0,
 	};
-	return { deps, store, fetched, opened, provided, transcriptCalls };
+	return { deps, store, fetched, opened, provided, transcriptCalls, feedSent, feedWindowCalls };
 }
 
 describe('waiting-api', () => {
@@ -646,11 +662,241 @@ describe('provideText publisher (READ-357)', () => {
 });
 
 describe('listWaiting request (READ-38)', () => {
-	it('asks for needs_text and needs_transcript items', async () => {
+	it('asks for needs_text, needs_transcript and needs_feed items', async () => {
 		const { createWaitingApi } = await import('./waiting-api');
 		let body: any;
 		const fetchFn = (async (_u: any, init: any) => { body = JSON.parse(init.body); return { ok: true, status: 200, json: async () => ({ items: [] }) }; }) as unknown as typeof fetch;
 		await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).list();
-		expect(body).toEqual({ codes: ['needs_text', 'needs_transcript'] });
+		expect(body).toEqual({ codes: ['needs_text', 'needs_transcript', 'needs_feed'] });
+	});
+});
+
+describe('feeds of sites that turn the server away (READ-414)', () => {
+	const feed = (i = 1, url = `https://blog${i}.example.com/feed/`): WaitingItem => ({ id: `f${i}`, url, title: `blog${i}.example.com`, code: 'needs_feed' });
+	const rss = '<?xml version="1.0"?><rss version="2.0"><channel><title>T</title><item><title>A</title><link>https://blog1.example.com/a</link></item></channel></rss>';
+	const checkPage = readFileSync(join(__dirname, 'fixtures', 'feeds', 'salesforceben-check-page.html'), 'utf8');
+
+	it('parses needs_feed and keeps unknown codes as needs_text', () => {
+		const items = parseWaitingItems({ items: [
+			{ id: 'f1', url: 'https://a.com/feed', title: 'a.com', code: 'needs_feed' },
+			{ id: 'x', url: 'https://a.com/x', code: 'needs_other' },
+			{ id: 'y', url: 'https://a.com/y' },
+		] });
+		expect(items.map((i) => i.code)).toEqual(['needs_feed', 'needs_text', 'needs_text']);
+	});
+
+	it('sends a 2xx feed once, with no window', async () => {
+		const t = setup({ items: [feed(1)], pages: () => ({ status: 200, html: rss }) });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedSent).toEqual([{ id: 'f1', text: rss }]);
+		expect(t.feedWindowCalls).toEqual([]);
+		expect(t.provided).toEqual([]);
+		expect(r.finished).toBe(1);
+	});
+
+	it('a 403 goes to the window read and its text is sent', async () => {
+		const t = setup({ items: [feed(1)], pages: () => ({ status: 403, html: '' }), feedWindow: () => rss });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedWindowCalls).toEqual(['https://blog1.example.com/feed/']);
+		expect(t.feedSent).toEqual([{ id: 'f1', text: rss }]);
+		expect(r.finished).toBe(1);
+	});
+
+	it('a worker fetch that throws also goes to the window read', async () => {
+		const t = setup({ items: [feed(1)], pages: () => new Error('net'), feedWindow: () => rss });
+		await runFinisher(t.deps, 'now');
+		expect(t.feedSent).toHaveLength(1);
+	});
+
+	it('a window still on the check page after 30 s sends nothing and costs no attempt', async () => {
+		const t = setup({ items: [feed(1)], pages: () => ({ status: 403, html: checkPage }), feedWindow: () => null });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedSent).toEqual([]);
+		expect(r.retryLater).toBe(1);
+		expect(r.finished).toBe(0);
+		const saved: any = await t.store.get(FINISH_KEY);
+		expect(saved.attempts).toEqual({});
+	});
+
+	it('a 200 answer with an empty body, and an over-2 MB body, go to the window read', async () => {
+		const big = 'a'.repeat(FEED_MAX_BYTES + 1);
+		const t = setup({ items: [feed(1), feed(2)], pages: (u) => ({ status: 200, html: u.includes('blog1') ? '' : big }), feedWindow: () => big });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedWindowCalls).toHaveLength(2);
+		expect(t.feedSent).toEqual([]);
+		expect(r.retryLater).toBe(2);
+	});
+
+	it('follows needs_device at most 3 times', async () => {
+		let n = 0;
+		const t = setup({
+			items: [feed(1)],
+			pages: () => ({ status: 200, html: rss }),
+			feedSend: () => ({ ok: true, status: 200, needsDevice: `https://blog1.example.com/f${++n}` }),
+		});
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedSent).toHaveLength(3);
+		expect(t.fetched).toEqual(['https://blog1.example.com/feed/', 'https://blog1.example.com/f1', 'https://blog1.example.com/f2']);
+		expect(r.retryLater).toBe(1);
+		expect(r.finished).toBe(0);
+	});
+
+	it('follows one needs_device and finishes', async () => {
+		let n = 0;
+		const t = setup({
+			items: [feed(1)],
+			pages: () => ({ status: 200, html: rss }),
+			feedSend: () => (n++ === 0 ? { ok: true, status: 200, needsDevice: 'https://blog1.example.com/rss.xml' } : { ok: true, status: 200 }),
+		});
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.fetched).toEqual(['https://blog1.example.com/feed/', 'https://blog1.example.com/rss.xml']);
+		expect(r.finished).toBe(1);
+	});
+
+	it('never follows a needs_device link it must not open', async () => {
+		const t = setup({
+			items: [feed(1)],
+			pages: () => ({ status: 200, html: rss }),
+			feedSend: () => ({ ok: true, status: 200, needsDevice: 'https://192.168.1.2/feed' }),
+		});
+		await runFinisher(t.deps, 'now');
+		expect(t.fetched).toEqual(['https://blog1.example.com/feed/']);
+		expect(t.feedSent).toHaveLength(1);
+	});
+
+	it('a feed failure never calls markUnreadable, however often it fails', async () => {
+		const t = setup({ items: [feed(1)], pages: () => ({ status: 403, html: '' }), feedWindow: () => null,
+			state: { attempts: { f1: 9 } } });
+		for (let i = 0; i < 5; i++) await runFinisher(t.deps, 'now');
+		expect(t.provided.filter((p) => p.outcome === 'unreadable')).toEqual([]);
+	});
+
+	it('a refused send (404, 409, 422) is retry later, no attempt, no markUnreadable', async () => {
+		for (const status of [404, 409, 422, 413, 400]) {
+			const t = setup({ items: [feed(1)], pages: () => ({ status: 200, html: rss }), feedSend: () => ({ ok: false, status }) });
+			const r = await runFinisher(t.deps, 'now');
+			expect(r.retryLater).toBe(1);
+			expect(r.stopped).toBeNull();
+			expect(t.provided).toEqual([]);
+			expect(((await t.store.get(FINISH_KEY)) as any).attempts).toEqual({});
+		}
+	});
+
+	it('401 from Lazy Reader stops the run like for articles', async () => {
+		const t = setup({ items: [feed(1), feed(2)], pages: () => ({ status: 200, html: rss }), feedSend: () => ({ ok: false, status: 401 }) });
+		const r = await runFinisher(t.deps, 'now');
+		expect(r.stopped).toBe('token');
+		expect(t.feedSent).toHaveLength(1);
+	});
+
+	it('an unsafe feed url is not fetched and not marked unreadable', async () => {
+		const t = setup({ items: [feed(1, 'https://localhost/feed'), feed(2, 'file:///etc/passwd')] });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.fetched).toEqual([]);
+		expect(t.feedWindowCalls).toEqual([]);
+		expect(t.provided).toEqual([]);
+		expect(r.retryLater).toBe(2);
+	});
+
+	it('a redirect to a link it must not read sends nothing', async () => {
+		const t = setup({ items: [feed(1)], pages: (u) => ({ status: 200, html: rss, finalUrl: 'https://10.0.0.5/feed' }) });
+		await runFinisher(t.deps, 'now');
+		expect(t.feedSent).toEqual([]);
+		expect(t.feedWindowCalls).toEqual([]);
+	});
+
+	it('without a window reader a refused feed is retried later', async () => {
+		const t = setup({ items: [feed(1)], pages: () => ({ status: 403, html: '' }), noFeedWindow: true });
+		const r = await runFinisher(t.deps, 'now');
+		expect(r.retryLater).toBe(1);
+		expect(t.feedSent).toEqual([]);
+	});
+
+	it('automatic runs leave a feed alone for an hour after the last try', async () => {
+		const t = setup({ items: [feed(1)], pages: () => ({ status: 403, html: '' }), feedWindow: () => null });
+		await runFinisher(t.deps, 'now');
+		await runFinisher(t.deps, 'wake-rerun');
+		expect(t.fetched).toHaveLength(1);
+	});
+
+	it('feeds and articles in one list are each handled by their own branch', async () => {
+		const t = setup({ items: [item(1), feed(2), video(3)], pages: (u) => ({ status: 200, html: u.includes('blog2') ? rss : full() }),
+			transcript: () => ({ text: full(), blocked: false }) });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedSent.map((f) => f.id)).toEqual(['f2']);
+		expect(t.provided.map((p) => p.id)).toEqual(['i1', 'v3']);
+		expect(r.finished).toBe(3);
+	});
+
+	it('an old-shape list without needs_feed behaves as before', async () => {
+		const t = setup({ items: [item(1), item(2)], pages: () => ({ status: 200, html: full() }) });
+		const r = await runFinisher(t.deps, 'now');
+		expect(t.feedSent).toEqual([]);
+		expect(t.feedWindowCalls).toEqual([]);
+		expect(r.finished).toBe(2);
+	});
+
+	it('provideFeedText posts feed_id and text and reads needs_device', async () => {
+		let url = '';
+		let body: any;
+		let headers: any;
+		const fetchFn = (async (u: any, init: any) => { url = u; body = JSON.parse(init.body); headers = init.headers; return { ok: true, status: 200, json: async () => ({ needs_device: 'https://a.com/feed' }) }; }) as unknown as typeof fetch;
+		const r = await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).provideFeedText('f1', '<html></html>');
+		expect(url).toBe('https://lazyreader.app/api/provideFeedText');
+		expect(body).toEqual({ feed_id: 'f1', text: '<html></html>' });
+		expect(headers['x-reader-token']).toBe('tok');
+		expect(r).toMatchObject({ ok: true, needsDevice: 'https://a.com/feed' });
+	});
+
+	it('provideFeedText ignores a non-string needs_device and fails without a token', async () => {
+		const json = async () => ({ needs_device: 5 });
+		const fetchFn = (async () => ({ ok: true, status: 200, json })) as unknown as typeof fetch;
+		expect((await createWaitingApi('https://lazyreader.app/api/capture', 'tok', fetchFn).provideFeedText('f1', 'x')).needsDevice).toBeUndefined();
+		const r = await createWaitingApi('https://lazyreader.app/api/capture', '', fetchFn).provideFeedText('f1', 'x');
+		expect(r.ok).toBe(false);
+		expect(r.status).toBe(401);
+	});
+
+	it('the endpoint url for provideFeedText derives from the capture url', () => {
+		expect(endpointUrl('https://lazyreader.app/api/capture', 'provideFeedText')).toBe('https://lazyreader.app/api/provideFeedText');
+	});
+});
+
+describe('feed-read rules (READ-414)', () => {
+	const checkPage = readFileSync(join(__dirname, 'fixtures', 'feeds', 'salesforceben-check-page.html'), 'utf8');
+	const snap = (o: Partial<Parameters<typeof pickFeedText>[0]> = {}) => ({ contentType: 'text/xml', xmlSource: '', outerHTML: '', bodyText: '', preOnly: false, ...o });
+
+	it('the saved check page title is read as a check page', () => {
+		const title = /<title>([^<]*)<\/title>/.exec(checkPage)?.[1];
+		expect(title).toBe('Checking your browser...');
+		expect(isCheckPageTitle(title)).toBe(true);
+	});
+	it('knows check page titles, and not feed titles', () => {
+		expect(isCheckPageTitle('Just a moment...')).toBe(true);
+		expect(isCheckPageTitle('CHECKING YOUR BROWSER')).toBe(true);
+		expect(isCheckPageTitle('Salesforce Ben RSS feed')).toBe(false);
+		expect(isCheckPageTitle('')).toBe(false);
+		expect(isCheckPageTitle(null)).toBe(false);
+		expect(isCheckPageTitle(undefined)).toBe(false);
+		expect(isCheckPageTitle('<script>alert(1)</script> Привет')).toBe(false);
+	});
+	it('feedTextFits: empty, blank, null, limit, multibyte', () => {
+		expect(feedTextFits('')).toBe(false);
+		expect(feedTextFits('   \n')).toBe(false);
+		expect(feedTextFits(null)).toBe(false);
+		expect(feedTextFits(undefined)).toBe(false);
+		expect(feedTextFits('<rss/>')).toBe(true);
+		expect(feedTextFits('a'.repeat(FEED_MAX_BYTES))).toBe(true);
+		expect(feedTextFits('a'.repeat(FEED_MAX_BYTES + 1))).toBe(false);
+		// fewer characters than the limit but more bytes
+		expect(feedTextFits('é'.repeat(FEED_MAX_BYTES / 2 + 1))).toBe(false);
+		expect(feedTextFits('é'.repeat(FEED_MAX_BYTES / 2))).toBe(true);
+	});
+	it('pickFeedText: xml source first, html outerHTML, plain text view falls back to the text', () => {
+		expect(pickFeedText(snap({ xmlSource: '<rss/>', outerHTML: '<html>viewer</html>', bodyText: 'viewer' }))).toBe('<rss/>');
+		expect(pickFeedText(snap({ contentType: 'text/html', outerHTML: '<html><rss/></html>', bodyText: 'x' }))).toBe('<html><rss/></html>');
+		expect(pickFeedText(snap({ contentType: 'text/html', outerHTML: '<html><body><pre>&lt;rss/&gt;</pre></body></html>', bodyText: '<rss/>', preOnly: true }))).toBe('<rss/>');
+		expect(pickFeedText(snap({ contentType: 'application/rss+xml', outerHTML: '<x/>', bodyText: '<rss/>' }))).toBe('<rss/>');
+		expect(pickFeedText(snap({ xmlSource: '   ', contentType: 'text/xml', bodyText: 'text' }))).toBe('text');
 	});
 });

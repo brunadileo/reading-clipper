@@ -1,7 +1,8 @@
 // READ-181: the two LazyReader calls the finisher makes. Kept in one small
 // file so the shapes are easy to adjust (the server side is built in parallel).
-//   POST {base}/listWaiting  x-reader-token, { codes: ['needs_text', 'needs_transcript'] } -> { items: [{ id, url, title, created_at, code }] }
-//        code is 'needs_text' (an article) or 'needs_transcript' (a YouTube video, READ-38);
+//   POST {base}/listWaiting  x-reader-token, { codes: ['needs_text', 'needs_transcript', 'needs_feed'] } -> { items: [{ id, url, title, created_at, code }] }
+//        code is 'needs_text' (an article) 'needs_transcript' (a YouTube video, READ-38) or
+//        'needs_feed' (READ-414, a followed site's feed the server cannot open);
 //        a server that predates it sends no code, read as 'needs_text'.
 //   POST {base}/provideText  x-reader-token, { item_id, text, title?, publisher? } | { item_id, outcome: 'unreadable' }
 //        title (READ-249) is sent only when the clipper read a real one from the page; the
@@ -9,9 +10,13 @@
 //        READ-357: YouTube transcripts send the video's title and, as publisher, the channel;
 //        the server uses them only when the stored title is empty or a link.
 //        -> { ok: true, outcome?: 'members_only' }
+//   POST {base}/provideFeedText  x-reader-token, { feed_id, text }   (READ-414)
+//        the raw feed (or the page that links it) of a site that turns the server away; code 'needs_feed'
+//        rows are listed only because the request asks for that code.
+//        -> { feed, added } | { needs_device: "<url>" } (read this link next) | { feed, already: true }
 // {base} comes from the capture URL setting: ".../api/capture" -> ".../api".
 
-export type WaitingCode = 'needs_text' | 'needs_transcript';
+export type WaitingCode = 'needs_text' | 'needs_transcript' | 'needs_feed';
 
 export interface WaitingItem {
 	id: string;
@@ -33,16 +38,19 @@ export interface ProvideResult {
 	status?: number;
 	outcome?: 'members_only' | string;
 	error?: string;
+	// READ-414: provideFeedText answered with a link to read next.
+	needsDevice?: string;
 }
 
 export interface WaitingApi {
 	list(): Promise<ListResult>;
 	provideText(itemId: string, text: string, title?: string, publisher?: string): Promise<ProvideResult>;
 	markUnreadable(itemId: string): Promise<ProvideResult>;
+	provideFeedText(feedId: string, text: string): Promise<ProvideResult>;
 }
 
 /** Endpoint URL for a function name, derived from the capture URL, or null. */
-export function endpointUrl(captureUrl: string, name: 'listWaiting' | 'provideText' | 'registerClipper' | 'getMyRole'): string | null {
+export function endpointUrl(captureUrl: string, name: 'listWaiting' | 'provideText' | 'provideFeedText' | 'registerClipper' | 'getMyRole'): string | null {
 	try {
 		const u = new URL(captureUrl);
 		if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
@@ -67,7 +75,7 @@ export function parseWaitingItems(json: any): WaitingItem[] {
 			url: it.url,
 			title: typeof it.title === 'string' ? it.title : '',
 			created_at: typeof it.created_at === 'string' ? it.created_at : undefined,
-			code: it.code === 'needs_transcript' ? 'needs_transcript' : 'needs_text',
+			code: it.code === 'needs_transcript' || it.code === 'needs_feed' ? it.code : 'needs_text',
 		});
 	}
 	return out;
@@ -92,12 +100,13 @@ async function post(fetchFn: typeof fetch, url: string, token: string, body: unk
 export function createWaitingApi(captureUrl: string, token: string, fetchFn: typeof fetch = fetch): WaitingApi {
 	const listUrl = endpointUrl(captureUrl, 'listWaiting');
 	const provideUrl = endpointUrl(captureUrl, 'provideText');
+	const provideFeedUrl = endpointUrl(captureUrl, 'provideFeedText');
 	const bad = { ok: false, status: 401, error: 'Missing capture URL or token' };
-	const missing = !token || !listUrl || !provideUrl;
+	const missing = !token || !listUrl || !provideUrl || !provideFeedUrl;
 	return {
 		async list() {
 			if (missing) return { ...bad, items: [] };
-			const r = await post(fetchFn, listUrl!, token, { codes: ['needs_text', 'needs_transcript'] });
+			const r = await post(fetchFn, listUrl!, token, { codes: ['needs_text', 'needs_transcript', 'needs_feed'] });
 			return { ok: r.ok, status: r.status, items: r.ok ? parseWaitingItems(r.json) : [], error: r.error };
 		},
 		async provideText(itemId, text, title, publisher) {
@@ -111,6 +120,12 @@ export function createWaitingApi(captureUrl: string, token: string, fetchFn: typ
 			if (missing) return bad;
 			const r = await post(fetchFn, provideUrl!, token, { item_id: itemId, outcome: 'unreadable' });
 			return { ok: r.ok, status: r.status, outcome: r.json?.outcome, error: r.error };
+		},
+		async provideFeedText(feedId, text) {
+			if (missing) return bad;
+			const r = await post(fetchFn, provideFeedUrl!, token, { feed_id: feedId, text });
+			const next = r.ok && typeof r.json?.needs_device === 'string' && r.json.needs_device ? r.json.needs_device : undefined;
+			return { ok: r.ok, status: r.status, needsDevice: next, error: r.error };
 		},
 	};
 }
