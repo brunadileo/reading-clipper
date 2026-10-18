@@ -189,10 +189,11 @@ export function mapAddResponse(raw: Raw, fallbackLabel: string): AddOutcome {
 		const label = typeof j.list_label === 'string' && j.list_label ? j.list_label : fallbackLabel;
 		if (j.already_exists) return { kind: 'already', label };
 		if (j.filed) {
-			// A link that sat in the feed moves; an unfiled find is filed. Neither can be undone.
-			return String(j.from ?? '').toLowerCase().includes('feed')
-				? { kind: 'moved', label }
-				: { kind: 'added', id: typeof j.id === 'string' ? j.id : '', label, canUndo: false, descriptionFailed: false };
+			// The server sends from:'find' for an unfiled find filed in place, and no `from` for a feed link
+			// moved into a list. Neither can be undone.
+			return j.from === 'find'
+				? { kind: 'added', id: typeof j.id === 'string' ? j.id : '', label, canUndo: false, descriptionFailed: false }
+				: { kind: 'moved', label };
 		}
 		if (typeof j.id === 'string' && j.id) {
 			return { kind: 'added', id: j.id, label, canUndo: j.created === true, descriptionFailed: j.status === 'failed' };

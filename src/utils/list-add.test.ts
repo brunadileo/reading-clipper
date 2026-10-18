@@ -124,10 +124,13 @@ describe('mapAddResponse', () => {
 	it('already in a list has no undo (EC-4)', () => {
 		expect(mapAddResponse({ ok: true, status: 200, json: { already_exists: 'i1', message: 'm' } }, 'Tools & Repos')).toEqual({ kind: 'already', label: 'Tools & Repos' });
 	});
-	it('moved from the feed, and an unfiled find filed without undo (EC-4)', () => {
-		expect(mapAddResponse({ ok: true, status: 200, json: { filed: true, from: 'feed' } }, 'Books')).toEqual({ kind: 'moved', label: 'Books' });
-		expect(mapAddResponse({ ok: true, status: 200, json: { filed: true, from: 'unfiled', id: 'i2' } }, 'Books'))
+	it('moved from the feed, and an unfiled find filed without undo (EC-4, real server bodies)', () => {
+		expect(mapAddResponse({ ok: true, status: 200, json: { id: 'i1', created: false, filed: true, in_review: false, status: 'ready' } }, 'Books'))
+			.toEqual({ kind: 'moved', label: 'Books' });
+		expect(mapAddResponse({ ok: true, status: 200, json: { id: 'i2', created: false, filed: true, from: 'find' } }, 'Books'))
 			.toEqual({ kind: 'added', id: 'i2', label: 'Books', canUndo: false, descriptionFailed: false });
+		expect(mapAddResponse({ ok: true, status: 200, json: { already_exists: true, message: 'Already in Books' } }, 'Books'))
+			.toEqual({ kind: 'already', label: 'Books' });
 	});
 	it('created false is not undoable', () => {
 		expect(mapAddResponse({ ok: true, status: 200, json: { id: 'i1', created: false } }, 'Books')).toMatchObject({ canUndo: false });
