@@ -143,6 +143,8 @@ export function buildAddRequest(
 	return { request: { list: list.slug, label: list.label, text } };
 }
 
+export const POST_TIMEOUT_MS = 30_000;
+
 type Raw = { ok: boolean; status?: number; json?: any; networkError?: boolean };
 
 async function post(conn: Connection, name: 'shareTypes' | 'clipperAddToList' | 'clipperUndoAdd', body: unknown): Promise<Raw & { missing?: boolean }> {
@@ -154,13 +156,22 @@ async function post(conn: Connection, name: 'shareTypes' | 'clipperAddToList' | 
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'x-reader-token': conn.token },
 			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(POST_TIMEOUT_MS),
 		});
 		let json: any;
 		try { json = await res.json(); } catch { /* empty or non-JSON body */ }
 		return { ok: res.ok, status: res.status, json };
-	} catch {
+	} catch (e) {
+		// A timeout is not "offline": the server may have the item, so it reads as a plain failure.
+		if ((e as { name?: string } | null)?.name === 'TimeoutError') return { ok: false };
 		return { ok: false, networkError: true };
 	}
+}
+
+/** Pure: the server said the list or type is gone (renamed or deleted elsewhere), so the cached menu is stale. */
+export function isUnknownListError(outcome: AddOutcome): boolean {
+	return outcome.kind === 'error' && outcome.code === 'bad-input'
+		&& typeof outcome.message === 'string' && /^No (list|type) called/i.test(outcome.message);
 }
 
 /** Pure: an answer of clipperAddToList to an outcome. */
@@ -227,7 +238,8 @@ export async function refreshLists(conn: Connection, now: number = Date.now()): 
 	const raw = await post(conn, 'shareTypes', {});
 	if (!raw.ok || !Array.isArray(raw.json?.types)) return null;
 	const lists = parseLists(raw.json);
-	try { await browser.storage.local.set({ [LISTS_KEY]: { lists, at: now } }); } catch { /* cache only */ }
+	// If the cache cannot be written the menu would find it empty and ask again, forever: count it as a failure.
+	try { await browser.storage.local.set({ [LISTS_KEY]: { lists, at: now } }); } catch { return null; }
 	return lists;
 }
 

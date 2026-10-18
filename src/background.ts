@@ -15,7 +15,7 @@ import { captureWithToken } from './utils/reading-sender';
 import { acceptConnect } from './utils/reading-token';
 import {
 	addToList, undoAdd, loadLists, refreshLists, saveLastUsed, listsAreStale, listMenuItems, parseMenuId,
-	buildAddRequest, sanitizeRequest, listUrl, type Connection, type AddRequest,
+	buildAddRequest, sanitizeRequest, isUnknownListError, listUrl, type Connection, type AddRequest,
 } from './utils/list-add';
 import { outcomeToNote, undoOutcomeToNote, type NoteState } from './utils/list-note';
 
@@ -821,7 +821,9 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 				const conn = await getConnection();
 				const label = String((typedRequest as any).label ?? '');
 				const outcome = conn ? await undoAdd(conn, String((typedRequest as any).id ?? '')) : { kind: 'error', code: 'not-connected' } as const;
-				sendResponse({ note: undoOutcomeToNote(outcome, label) });
+				const sent = String((typedRequest as any).openUrl ?? '');
+				const openUrl = /^https?:\/\//i.test(sent) ? sent : conn ? listUrl(conn.captureUrl) : undefined;
+				sendResponse({ note: undoOutcomeToNote(outcome, label, openUrl) });
 			})().catch(() => sendResponse({ note: { kind: 'error', code: 'failed' } }));
 			return true;
 		}
@@ -961,7 +963,13 @@ async function sendListNote(tabId: number, note: NoteState): Promise<void> {
 }
 
 async function runAddToList(tabId: number, request: AddRequest): Promise<void> {
-	const conn = await getConnection();
+	let conn: Connection | null;
+	try {
+		conn = await getConnection();
+	} catch {
+		await sendListNote(tabId, { kind: 'error', code: 'failed', retry: request });
+		return;
+	}
 	if (!conn) {
 		await sendListNote(tabId, { kind: 'error', code: 'not-connected' });
 		return;
@@ -971,7 +979,10 @@ async function runAddToList(tabId: number, request: AddRequest): Promise<void> {
 	const timer = setTimeout(() => { adding = sendListNote(tabId, { kind: 'adding', label: request.label }); }, 400);
 	let note: NoteState;
 	try {
-		note = outcomeToNote(await addToList(conn, request), request, listUrl(conn.captureUrl, request.list));
+		const outcome = await addToList(conn, request);
+		note = outcomeToNote(outcome, request, listUrl(conn.captureUrl, request.list));
+		// The list was renamed or deleted elsewhere: the menu is stale, so rebuild it before the error shows.
+		if (isUnknownListError(outcome)) await refreshListsAndMenu();
 	} catch {
 		note = { kind: 'error', code: 'failed', retry: request };
 	} finally {
@@ -1016,7 +1027,8 @@ async function handleAddToListClick(info: browser.Menus.OnClickData, tab: browse
 
 	const built = buildAddRequest(list, {
 		linkUrl: info.linkUrl,
-		selectionText: page?.selection || info.selectionText,
+		// On a link only the page's answer counts (a selection inside the link); Chrome's text may be from elsewhere.
+		selectionText: info.linkUrl ? (page?.selection ?? '') : (page?.selection || info.selectionText),
 		linkText: page?.text,
 	});
 	if ('error' in built) {

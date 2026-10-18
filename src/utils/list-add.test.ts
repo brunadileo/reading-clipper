@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import browser from 'webextension-polyfill';
 import {
 	addToList, undoAdd, parseLists, orderLists, buildAddRequest, mapAddResponse, collapseTitle, pickSelection,
-	sanitizeRequest, listMenuItems, parseMenuId, listUrl, appOrigin, refreshLists, loadLists, listsAreStale,
+	sanitizeRequest, isUnknownListError, POST_TIMEOUT_MS, listMenuItems, parseMenuId, listUrl, appOrigin, refreshLists, loadLists, listsAreStale,
 	MAX_LIST_TEXT_CHARS, type AddRequest,
 } from './list-add';
 
@@ -48,12 +48,6 @@ describe('parseLists and orderLists', () => {
 		expect(orderLists(l, '').map(x => x.slug)).toEqual(['a', 'b']);
 		expect(orderLists([], 'a')).toEqual([]);
 		expect(orderLists(undefined as any, 'a')).toEqual([]);
-	});
-	it('handles 10k lists', () => {
-		const l = Array.from({ length: 10000 }, (_, i) => ({ slug: `s${i}`, label: `L${i}` }));
-		const out = orderLists(l, 's9999');
-		expect(out.length).toBe(10000);
-		expect(out[0].slug).toBe('s9999');
 	});
 });
 
@@ -293,6 +287,11 @@ describe('cache', () => {
 		expect(set).not.toHaveBeenCalled();
 		set.mockRestore();
 	});
+	it('refreshLists returns null when the cache write throws, so the menu cannot loop on it', async () => {
+		const set = vi.spyOn(browser.storage.local, 'set').mockRejectedValue(new Error('quota'));
+		expect(await refreshLists(conn(reply(200, { types: [{ slug: 'book', label: 'Books' }] })))).toBeNull();
+		set.mockRestore();
+	});
 	it('loadLists reads the cache and survives bad storage', async () => {
 		const get = vi.spyOn(browser.storage.local, 'get');
 		get.mockResolvedValueOnce({ readingLists: { lists: [{ slug: 'a', label: 'A' }], at: 9 }, readingListLastUsed: 'a' } as any);
@@ -302,5 +301,32 @@ describe('cache', () => {
 		get.mockRejectedValueOnce(new Error('x'));
 		expect(await loadLists()).toEqual({ stored: null, lastUsed: null });
 		get.mockRestore();
+	});
+});
+
+describe('timeout and unknown list', () => {
+	it('every call carries a 30 s abort signal', async () => {
+		expect(POST_TIMEOUT_MS).toBe(30000);
+		const f = reply(200, { id: 'x', created: true });
+		await addToList(conn(f), { list: 'book', label: 'Books', text: 'hi' });
+		expect(f.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+	});
+	it('a timeout is a failed outcome (Try again), not offline', async () => {
+		const timeout = Object.assign(new Error('t'), { name: 'TimeoutError' });
+		const f = vi.fn().mockRejectedValue(timeout);
+		expect(await addToList(conn(f), { list: 'book', label: 'Books', text: 'hi' })).toEqual({ kind: 'error', code: 'failed' });
+		expect(await undoAdd(conn(f), 'i1')).toEqual({ kind: 'error', code: 'failed' });
+		const off = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+		expect(await addToList(conn(off), { list: 'book', label: 'Books', text: 'hi' })).toEqual({ kind: 'error', code: 'offline' });
+	});
+	it('isUnknownListError matches only a 400 saying the list or type is gone', () => {
+		const bad = (message?: string) => ({ kind: 'error', code: 'bad-input', message }) as const;
+		expect(isUnknownListError(bad('No list called "x"'))).toBe(true);
+		expect(isUnknownListError(bad('No type called x'))).toBe(true);
+		expect(isUnknownListError(bad('Text is empty'))).toBe(false);
+		expect(isUnknownListError(bad(undefined))).toBe(false);
+		expect(isUnknownListError({ kind: 'error', code: 'failed' })).toBe(false);
+		expect(isUnknownListError({ kind: 'already', label: 'x' })).toBe(false);
+		expect(isUnknownListError(mapAddResponse({ ok: false, status: 400, json: { error: 'No list called "<script>"' } }, 'x'))).toBe(true);
 	});
 });

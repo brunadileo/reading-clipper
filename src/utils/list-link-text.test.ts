@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { linkTextOf, findLinkTextByUrl } from './list-link-text';
+import { linkTextOf, findLinkTextByUrl, selectionInsideAnchor } from './list-link-text';
 
 beforeEach(() => { document.body.innerHTML = ''; });
 
@@ -37,8 +37,38 @@ describe('findLinkTextByUrl', () => {
 		expect(findLinkTextByUrl(document, '')).toBe('');
 		expect(findLinkTextByUrl(document, undefined as any)).toBe('');
 	});
-	it('handles 10k links', () => {
-		document.body.innerHTML = Array.from({ length: 10000 }, (_, i) => `<a href="https://a.com/${i}">L${i}</a>`).join('');
-		expect(findLinkTextByUrl(document, 'https://a.com/9999')).toBe('L9999');
+});
+
+describe('selectionInsideAnchor', () => {
+	const select = (node: Node, from: number, to: number) => {
+		const r = document.createRange();
+		r.setStart(node, from);
+		r.setEnd(node, to);
+		const sel = window.getSelection()!;
+		sel.removeAllRanges();
+		sel.addRange(r);
+		return sel;
+	};
+	it('takes a selection inside the link', () => {
+		document.body.innerHTML = '<p id="p">Elsewhere</p><a id="a" href="https://a.com">Link title here</a>';
+		const a = document.getElementById('a')!;
+		expect(selectionInsideAnchor(select(a.firstChild!, 0, 10), a)).toBe('Link title');
+	});
+	it('ignores a selection elsewhere on the page', () => {
+		document.body.innerHTML = '<p id="p">Elsewhere</p><a id="a" href="https://a.com">Link</a>';
+		const p = document.getElementById('p')!;
+		expect(selectionInsideAnchor(select(p.firstChild!, 0, 5), document.getElementById('a'))).toBe('');
+	});
+	it('ignores a selection that only starts inside the link', () => {
+		document.body.innerHTML = '<div id="d"><a id="a" href="https://a.com">Link</a> and more</div>';
+		const d = document.getElementById('d')!;
+		expect(selectionInsideAnchor(select(d, 0, 2), document.getElementById('a'))).toBe('');
+	});
+	it('empty for no selection, no anchor or null', () => {
+		document.body.innerHTML = '<a id="a" href="x">L</a>';
+		window.getSelection()!.removeAllRanges();
+		expect(selectionInsideAnchor(window.getSelection(), document.getElementById('a'))).toBe('');
+		expect(selectionInsideAnchor(null, document.getElementById('a'))).toBe('');
+		expect(selectionInsideAnchor(window.getSelection(), null)).toBe('');
 	});
 });

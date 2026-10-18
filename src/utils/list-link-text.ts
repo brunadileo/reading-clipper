@@ -25,3 +25,15 @@ export function findLinkTextByUrl(doc: Document, url: string): string {
 	}
 	return '';
 }
+
+/**
+ * The selected text, only when the whole selection sits inside `anchor` (so a selection
+ * elsewhere on the page is never taken for the right-clicked link's title).
+ */
+export function selectionInsideAnchor(sel: Selection | null | undefined, anchor: Element | null | undefined): string {
+	if (!sel || !anchor || sel.rangeCount === 0) return '';
+	for (let i = 0; i < sel.rangeCount; i++) {
+		if (!anchor.contains(sel.getRangeAt(i).commonAncestorContainer)) return '';
+	}
+	return String(sel);
+}

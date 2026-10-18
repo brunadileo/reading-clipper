@@ -16,7 +16,7 @@ import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './ut
 import { parseForClip } from './utils/clip-utils';
 import { scrollToLoad } from './utils/scroll-to-load';
 import { showListNote, type NoteState } from './utils/list-note';
-import { linkTextOf, findLinkTextByUrl } from './utils/list-link-text';
+import { linkTextOf, findLinkTextByUrl, selectionInsideAnchor } from './utils/list-link-text';
 import { pickSelection } from './utils/list-add';
 
 declare global {
@@ -124,7 +124,9 @@ declare global {
 		try {
 			const origin = (event.composedPath?.()[0] ?? event.target) as Element | null;
 			const anchor = origin && origin.closest ? origin.closest('a[href]') as HTMLAnchorElement | null : null;
-			lastContext = { href: anchor?.href ?? '', text: linkTextOf(anchor), selection: String(window.getSelection() ?? '') };
+			// On a link only a selection inside that link may become its title; elsewhere on the page it is no business of this click.
+			const selection = anchor ? selectionInsideAnchor(window.getSelection(), anchor) : String(window.getSelection() ?? '');
+			lastContext = { href: anchor?.href ?? '', text: linkTextOf(anchor), selection };
 		} catch {
 			lastContext = null;
 		}
@@ -134,7 +136,9 @@ declare global {
 		const fromEvent = lastContext && url && lastContext.href === url ? lastContext.text : '';
 		const text = fromEvent || findLinkTextByUrl(document, url);
 		let pageSelection = lastContext?.selection ?? '';
-		if (!pageSelection) { try { pageSelection = String(window.getSelection() ?? ''); } catch { /* none */ } }
+		// No recorded click for a link: take no selection, it cannot be placed inside the link.
+		if (url && !(lastContext && lastContext.href === url)) pageSelection = '';
+		else if (!url && !pageSelection) { try { pageSelection = String(window.getSelection() ?? ''); } catch { /* none */ } }
 		return { text, selection: pickSelection(infoSelection, pageSelection) };
 	}
 
@@ -146,9 +150,12 @@ declare global {
 		} else if (id === 'connect') {
 			browser.runtime.sendMessage({ action: 'openListConnect' }).catch(() => {});
 		} else if (id === 'retry' && state.kind === 'error' && state.retry) {
-			browser.runtime.sendMessage({ action: 'addToListRequest', request: state.retry }).catch(() => {});
+			const failed = () => showListNote(document, { kind: 'error', code: 'failed' }, noteText, onNoteAction);
+			browser.runtime.sendMessage({ action: 'addToListRequest', request: state.retry })
+				.then((r) => { if (!(r as { success?: boolean } | undefined)?.success) failed(); })
+				.catch(failed);
 		} else if (id === 'undo' && state.kind === 'added') {
-			browser.runtime.sendMessage({ action: 'undoListAdd', id: state.id, label: state.label })
+			browser.runtime.sendMessage({ action: 'undoListAdd', id: state.id, label: state.label, openUrl: state.openUrl })
 				.then((r) => { const note = (r as { note?: NoteState } | undefined)?.note; if (note) showListNote(document, note, noteText, onNoteAction); })
 				.catch(() => showListNote(document, { kind: 'error', code: 'failed' }, noteText, onNoteAction));
 		}

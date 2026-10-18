@@ -10,7 +10,7 @@ export type NoteState =
 	| { kind: 'undone'; label: string }
 	| { kind: 'already'; label: string; openUrl: string }
 	| { kind: 'moved'; label: string; openUrl: string }
-	| { kind: 'error'; code: AddErrorCode | 'kept'; message?: string; retry?: AddRequest };
+	| { kind: 'error'; code: AddErrorCode | 'kept' | 'undo-failed'; message?: string; retry?: AddRequest; openUrl?: string };
 
 export type NoteButton = 'undo' | 'open' | 'retry' | 'connect' | 'close';
 
@@ -43,8 +43,13 @@ export function outcomeToNote(outcome: AddOutcome, request: AddRequest, openUrl:
 }
 
 /** Pure: the note for an undo's outcome. */
-export function undoOutcomeToNote(outcome: UndoOutcome, label: string): NoteState {
-	return outcome.kind === 'removed' ? { kind: 'undone', label } : { kind: 'error', code: outcome.code };
+export function undoOutcomeToNote(outcome: UndoOutcome, label: string, openUrl?: string): NoteState {
+	if (outcome.kind === 'removed') return { kind: 'undone', label };
+	// A failed or offline undo must not say "Couldn't add": the item is still on the list.
+	if (outcome.code === 'failed' || outcome.code === 'offline') {
+		return { kind: 'error', code: 'undo-failed', ...(openUrl ? { openUrl } : {}) };
+	}
+	return { kind: 'error', code: outcome.code };
 }
 
 /** Pure: what the note says and offers for a state. */
@@ -52,7 +57,7 @@ export function noteView(state: NoteState, t: Translate): NoteView {
 	const b = (id: NoteButton, key: string) => ({ id, label: t(key) });
 	switch (state.kind) {
 		case 'adding':
-			return { text: t('noteAdding', [state.label]), role: 'status', buttons: [], ttl: 0 };
+			return { text: t('noteAdding', [state.label]), role: 'status', buttons: [b('close', 'noteClose')], ttl: 0 };
 		case 'added':
 			return {
 				text: t(state.descriptionFailed ? 'noteAddedFailed' : 'noteAdded', [state.label]),
@@ -77,6 +82,8 @@ export function noteView(state: NoteState, t: Translate): NoteView {
 					return { text: t('noteTooLong'), role: 'alert', buttons: [close], ttl: 0 };
 				case 'kept':
 					return { text: t('noteKept'), role: 'alert', buttons: [close], ttl: 0 };
+				case 'undo-failed':
+					return { text: t('noteUndoFailed'), role: 'alert', buttons: state.openUrl ? [b('open', 'noteOpen'), close] : [close], ttl: 0 };
 				case 'bad-input':
 					return { text: state.message || t('noteFailed'), role: 'alert', buttons: [close], ttl: 0 };
 				default:
@@ -100,6 +107,15 @@ const CSS = `
 `;
 
 let timer: ReturnType<typeof setTimeout> | null = null;
+// The shadow root is closed, so the page cannot reach into it; we keep the handle.
+let ownHost: HTMLElement | null = null;
+let ownRoot: ShadowRoot | null = null;
+
+/** Test hook: the closed root of the note on screen, or null. */
+export function getNoteRoot(doc: Document): ShadowRoot | null {
+	const host = doc.getElementById(NOTE_HOST_ID);
+	return host && host === ownHost ? ownRoot : null;
+}
 
 function clearTimer() {
 	if (timer !== null) { clearTimeout(timer); timer = null; }
@@ -118,14 +134,17 @@ export function showListNote(doc: Document, state: NoteState, t: Translate, onAc
 	clearTimer();
 	const view = noteView(state, t);
 	let host = doc.getElementById(NOTE_HOST_ID);
+	// An element with our id that is not ours (a page squatting on it) goes; we build a fresh host.
+	if (host && (host !== ownHost || !ownRoot)) { host.remove(); host = null; }
 	if (!host) {
 		host = doc.createElement('div');
 		host.id = NOTE_HOST_ID;
 		host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;left:0;bottom:0;width:0;height:0';
-		host.attachShadow({ mode: 'open' });
+		ownRoot = host.attachShadow({ mode: 'closed' });
+		ownHost = host;
 		(doc.body || doc.documentElement).appendChild(host);
 	}
-	const root = host.shadowRoot!;
+	const root = ownRoot!;
 	root.replaceChildren();
 	const style = doc.createElement('style');
 	style.textContent = CSS;

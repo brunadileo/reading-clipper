@@ -1227,6 +1227,9 @@
 	"noteFailed": {
 		"message": "Couldn’t add. Try again."
 	},
+	"noteUndoFailed": {
+		"message": "Couldn’t remove it. Delete it in Lazy Reader."
+	},
 	"noteKept": {
 		"message": "Already kept. Delete it in Lazy Reader."
 	},

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { noteView, outcomeToNote, undoOutcomeToNote, showListNote, removeListNote, NOTE_HOST_ID, type NoteState } from './list-note';
+import { noteView, outcomeToNote, undoOutcomeToNote, showListNote, removeListNote, getNoteRoot, NOTE_HOST_ID, type NoteState } from './list-note';
 
 const t = (key: string, subs?: string[]) => (subs?.length ? `${key}(${subs.join(',')})` : key);
 const added: NoteState = { kind: 'added', label: 'Books', id: 'i1', canUndo: true, descriptionFailed: false, openUrl: 'https://lazyreader.app/lists/book' };
@@ -19,7 +19,7 @@ describe('noteView', () => {
 		expect(noteView({ ...added, descriptionFailed: true }, t).text).toBe('noteAddedFailed(Books)');
 	});
 	it('adding, undone, already, moved', () => {
-		expect(noteView({ kind: 'adding', label: 'Books' }, t)).toMatchObject({ text: 'noteAdding(Books)', buttons: [], ttl: 0 });
+		expect(noteView({ kind: 'adding', label: 'Books' }, t)).toMatchObject({ text: 'noteAdding(Books)', buttons: [{ id: 'close', label: 'noteClose' }], ttl: 0 });
 		expect(noteView({ kind: 'undone', label: 'Books' }, t)).toMatchObject({ text: 'noteRemoved(Books)', ttl: 3000 });
 		expect(noteView({ kind: 'already', label: 'Tools', openUrl: 'u' }, t)).toMatchObject({ text: 'noteAlready(Tools)', ttl: 6000 });
 		expect(noteView({ kind: 'moved', label: 'Books', openUrl: 'u' }, t).text).toBe('noteMoved(Books)');
@@ -53,6 +53,18 @@ describe('outcomeToNote', () => {
 		expect(outcomeToNote({ kind: 'already', label: 'B' }, req, 'u')).toEqual({ kind: 'already', label: 'B', openUrl: 'u' });
 		expect(outcomeToNote({ kind: 'moved', label: 'B' }, req, 'u')).toEqual({ kind: 'moved', label: 'B', openUrl: 'u' });
 	});
+	it('a failed or offline undo has its own words and keeps Open', () => {
+		const n = undoOutcomeToNote({ kind: 'error', code: 'failed' }, 'Books', 'https://lazyreader.app/lists/book');
+		expect(n).toEqual({ kind: 'error', code: 'undo-failed', openUrl: 'https://lazyreader.app/lists/book' });
+		const v = noteView(n, t);
+		expect(v.text).toBe('noteUndoFailed');
+		expect(v.buttons.map(b => b.id)).toEqual(['open', 'close']);
+		expect(undoOutcomeToNote({ kind: 'error', code: 'offline' }, 'Books')).toEqual({ kind: 'error', code: 'undo-failed' });
+		expect(noteView({ kind: 'error', code: 'undo-failed' }, t).buttons.map(b => b.id)).toEqual(['close']);
+	});
+	it('the adding note has a Close button', () => {
+		expect(noteView({ kind: 'adding', label: 'Books' }, t).buttons.map(b => b.id)).toEqual(['close']);
+	});
 	it('undo outcomes', () => {
 		expect(undoOutcomeToNote({ kind: 'removed' }, 'Books')).toEqual({ kind: 'undone', label: 'Books' });
 		expect(undoOutcomeToNote({ kind: 'error', code: 'kept' }, 'Books')).toEqual({ kind: 'error', code: 'kept' });
@@ -62,7 +74,7 @@ describe('outcomeToNote', () => {
 describe('showListNote', () => {
 	beforeEach(() => { vi.useFakeTimers(); document.body.innerHTML = ''; });
 	afterEach(() => { removeListNote(document); vi.useRealTimers(); });
-	const root = () => document.getElementById(NOTE_HOST_ID)!.shadowRoot!;
+	const root = () => getNoteRoot(document)!;
 
 	it('draws in a shadow root with role=status and 44 px buttons, and takes no focus', () => {
 		showListNote(document, added, t, () => {});
@@ -108,6 +120,27 @@ describe('showListNote', () => {
 		expect(spy).toHaveBeenCalledWith('undo', added);
 		(root().querySelectorAll('button')[1] as HTMLButtonElement).click();
 		expect(spy).toHaveBeenLastCalledWith('open', added);
+	});
+	it('the shadow root is closed, and a squatter with our id is replaced', () => {
+		showListNote(document, added, t, () => {});
+		expect(document.getElementById(NOTE_HOST_ID)!.shadowRoot).toBeNull();
+		removeListNote(document);
+		const squat = document.createElement('div');
+		squat.id = NOTE_HOST_ID;
+		squat.attachShadow({ mode: 'open' }).innerHTML = '<p>fake</p>';
+		document.body.append(squat);
+		showListNote(document, added, t, () => {});
+		expect(document.querySelectorAll(`#${NOTE_HOST_ID}`).length).toBe(1);
+		expect(document.getElementById(NOTE_HOST_ID)).not.toBe(squat);
+		expect(root().querySelector('.note')!.textContent).toContain('noteAdded(Books)');
+	});
+	it('the adding note is closable and stays until closed', () => {
+		showListNote(document, { kind: 'adding', label: 'Books' }, t, () => {});
+		vi.advanceTimersByTime(60_000);
+		const btn = root().querySelector('button') as HTMLButtonElement;
+		expect(btn.textContent).toBe('noteClose');
+		btn.click();
+		expect(document.getElementById(NOTE_HOST_ID)).toBeNull();
 	});
 	it('page text is never parsed as HTML', () => {
 		showListNote(document, { kind: 'error', code: 'bad-input', message: '<img src=x onerror=alert(1)>' }, t, () => {});
