@@ -15,6 +15,9 @@ import { expandShortenedLinks } from './utils/expand-short-links';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
 import { scrollToLoad } from './utils/scroll-to-load';
+import { showListNote, type NoteState } from './utils/list-note';
+import { linkTextOf, findLinkTextByUrl } from './utils/list-link-text';
+import { pickSelection } from './utils/list-add';
 
 declare global {
 	interface Window {
@@ -113,6 +116,44 @@ declare global {
 
 	let initializationPromise: Promise<void> = Promise.resolve();
 
+	// READ-442: Chrome's click info has no link text, so the right-clicked link's
+	// text and the page's own selection are recorded here for "Add to a list".
+	let lastContext: { href: string; text: string; selection: string } | null = null;
+	document.addEventListener('contextmenu', (event) => {
+		if (window.obsidianClipperGeneration !== myGeneration) return;
+		try {
+			const origin = (event.composedPath?.()[0] ?? event.target) as Element | null;
+			const anchor = origin && origin.closest ? origin.closest('a[href]') as HTMLAnchorElement | null : null;
+			lastContext = { href: anchor?.href ?? '', text: linkTextOf(anchor), selection: String(window.getSelection() ?? '') };
+		} catch {
+			lastContext = null;
+		}
+	}, true);
+
+	function getLastLinkText(url: string, infoSelection: string): { text: string; selection: string } {
+		const fromEvent = lastContext && url && lastContext.href === url ? lastContext.text : '';
+		const text = fromEvent || findLinkTextByUrl(document, url);
+		let pageSelection = lastContext?.selection ?? '';
+		if (!pageSelection) { try { pageSelection = String(window.getSelection() ?? ''); } catch { /* none */ } }
+		return { text, selection: pickSelection(infoSelection, pageSelection) };
+	}
+
+	const noteText = (key: string, subs?: string[]) => browser.i18n.getMessage(key, subs) || key;
+
+	function onNoteAction(id: string, state: NoteState) {
+		if (id === 'open' && 'openUrl' in state) {
+			window.open(state.openUrl, '_blank', 'noopener');
+		} else if (id === 'connect') {
+			browser.runtime.sendMessage({ action: 'openListConnect' }).catch(() => {});
+		} else if (id === 'retry' && state.kind === 'error' && state.retry) {
+			browser.runtime.sendMessage({ action: 'addToListRequest', request: state.retry }).catch(() => {});
+		} else if (id === 'undo' && state.kind === 'added') {
+			browser.runtime.sendMessage({ action: 'undoListAdd', id: state.id, label: state.label })
+				.then((r) => { const note = (r as { note?: NoteState } | undefined)?.note; if (note) showListNote(document, note, noteText, onNoteAction); })
+				.catch(() => showListNote(document, { kind: 'error', code: 'failed' }, noteText, onNoteAction));
+		}
+	}
+
 	browser.runtime.onMessage.addListener((request: any, sender, sendResponse) => {
 		// If a newer generation of this content script has been injected,
 		// yield to it rather than responding from a potentially stale context.
@@ -122,6 +163,17 @@ declare global {
 
 		if (request.action === "ping") {
 			initializationPromise.then(() => sendResponse({}));
+			return true;
+		}
+
+		if (request.action === "getLastLinkText") {
+			sendResponse(getLastLinkText(String(request.url ?? ''), String(request.selection ?? '')));
+			return true;
+		}
+
+		if (request.action === "showListNote") {
+			showListNote(document, request.note as NoteState, noteText, onNoteAction);
+			sendResponse({ success: true });
 			return true;
 		}
 

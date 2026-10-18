@@ -1154,5 +1154,95 @@
 	},
 	"popupNotConnected": {
 		"message": "Not connected"
+	},
+	"listAddMenu": {
+		"message": "Add to a list"
+	},
+	"listAddConnect": {
+		"message": "Connect the clipper first"
+	},
+	"listAddLoading": {
+		"message": "Loading your lists…"
+	},
+	"listAddNone": {
+		"message": "Make a list in Lazy Reader first"
+	},
+	"listAddReload": {
+		"message": "Couldn’t load your lists. Try again"
+	},
+	"noteAdding": {
+		"message": "Adding to $LIST$…",
+		"placeholders": {
+			"list": {
+				"content": "$1"
+			}
+		}
+	},
+	"noteAdded": {
+		"message": "Added to $LIST$",
+		"placeholders": {
+			"list": {
+				"content": "$1"
+			}
+		}
+	},
+	"noteAddedFailed": {
+		"message": "Added to $LIST$. The description failed; Try again is in Lazy Reader.",
+		"placeholders": {
+			"list": {
+				"content": "$1"
+			}
+		}
+	},
+	"noteRemoved": {
+		"message": "Removed from $LIST$",
+		"placeholders": {
+			"list": {
+				"content": "$1"
+			}
+		}
+	},
+	"noteAlready": {
+		"message": "Already in $LIST$",
+		"placeholders": {
+			"list": {
+				"content": "$1"
+			}
+		}
+	},
+	"noteMoved": {
+		"message": "Moved from your feed to $LIST$",
+		"placeholders": {
+			"list": {
+				"content": "$1"
+			}
+		}
+	},
+	"noteOffline": {
+		"message": "You’re offline. Nothing was added."
+	},
+	"noteTooLong": {
+		"message": "Too long for a list entry. Select less."
+	},
+	"noteFailed": {
+		"message": "Couldn’t add. Try again."
+	},
+	"noteKept": {
+		"message": "Already kept. Delete it in Lazy Reader."
+	},
+	"noteUndo": {
+		"message": "Undo"
+	},
+	"noteOpen": {
+		"message": "Open"
+	},
+	"noteTryAgain": {
+		"message": "Try again"
+	},
+	"noteConnect": {
+		"message": "Connect"
+	},
+	"noteClose": {
+		"message": "Close"
 	}
 }

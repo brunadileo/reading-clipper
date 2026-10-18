@@ -5,7 +5,7 @@ import { TextHighlightData } from './utils/highlighter';
 import { debounce } from './utils/debounce';
 import { Settings } from './types/types';
 import { debugLog } from './utils/debug';
-import { incrementStat, saveReadingSettings } from './utils/storage-utils';
+import { incrementStat, saveReadingSettings, loadReadingSettings } from './utils/storage-utils';
 import { hasStoredHighlights } from './utils/url-utils';
 import { IS_STORE_BUILD } from './utils/store-build';
 import { initSyncRunner } from './utils/sync-runner';
@@ -13,6 +13,11 @@ import { initWaitingRunner } from './utils/waiting-runner';
 import { initClipperPush } from './utils/clipper-push-runner';
 import { captureWithToken } from './utils/reading-sender';
 import { acceptConnect } from './utils/reading-token';
+import {
+	addToList, undoAdd, loadLists, refreshLists, saveLastUsed, listsAreStale, listMenuItems, parseMenuId,
+	buildAddRequest, sanitizeRequest, listUrl, type Connection, type AddRequest,
+} from './utils/list-add';
+import { outcomeToNote, undoOutcomeToNote, type NoteState } from './utils/list-note';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -313,6 +318,9 @@ async function initialize() {
 		
 		// Initialize context menu
 		await debouncedUpdateContextMenu(-1);
+
+		// READ-442: refresh the cached lists at worker start when older than an hour.
+		refreshListsIfStale().catch(() => {});
 
 		// Enable Origin header for YouTube innertube API requests
 		await enableYouTubeInnertubeRule();
@@ -807,6 +815,28 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			}
 		}
 
+		// READ-442: the note on the page asks for Undo, Try again and Connect.
+		if (typedRequest.action === "undoListAdd") {
+			(async () => {
+				const conn = await getConnection();
+				const label = String((typedRequest as any).label ?? '');
+				const outcome = conn ? await undoAdd(conn, String((typedRequest as any).id ?? '')) : { kind: 'error', code: 'not-connected' } as const;
+				sendResponse({ note: undoOutcomeToNote(outcome, label) });
+			})().catch(() => sendResponse({ note: { kind: 'error', code: 'failed' } }));
+			return true;
+		}
+		if (typedRequest.action === "addToListRequest" && sender.tab?.id) {
+			const retry = sanitizeRequest((typedRequest as any).request);
+			if (retry) void runAddToList(sender.tab.id, retry);
+			sendResponse({ success: !!retry });
+			return true;
+		}
+		if (typedRequest.action === "openListConnect") {
+			browser.tabs.create({ url: browser.runtime.getURL('settings.html#connection') }).catch(() => {});
+			sendResponse({ success: true });
+			return true;
+		}
+
 		if (typedRequest.action === "sendToReading") {
 			const captureUrl = (typedRequest as any).captureUrl as string | undefined;
 			const token = (typedRequest as any).token as string | undefined;
@@ -878,6 +908,123 @@ browser.commands.onCommand.addListener(async (command, tab) => {
 		await toggleReaderModeInTab(tab.id);
 	}
 });
+
+// READ-442: "Add to a list" (selection and link right-clicks).
+let listsFailed = false;
+let listsRefreshing = false;
+
+async function getConnection(): Promise<Connection | null> {
+	const { token, captureUrl } = await loadReadingSettings();
+	return token ? { token, captureUrl } : null;
+}
+
+async function createAddToListMenu(): Promise<void> {
+	try {
+		const conn = await getConnection();
+		const { stored, lastUsed } = await loadLists();
+		const specs = listMenuItems({ connected: !!conn, stored, lastUsed, failed: listsFailed }, (key) => browser.i18n.getMessage(key));
+		for (const spec of specs) {
+			await browser.contextMenus.create(spec as browser.Menus.CreateCreatePropertiesType);
+		}
+		if (conn && !stored && !listsFailed) void refreshListsAndMenu();
+	} catch (error) {
+		console.error('Error building the Add to a list menu:', error);
+	}
+}
+
+async function refreshListsAndMenu(): Promise<void> {
+	if (listsRefreshing) return;
+	listsRefreshing = true;
+	try {
+		const conn = await getConnection();
+		if (conn) listsFailed = (await refreshLists(conn)) === null;
+	} catch {
+		listsFailed = true;
+	} finally {
+		listsRefreshing = false;
+	}
+	debouncedUpdateContextMenu(-1);
+}
+
+async function refreshListsIfStale(): Promise<void> {
+	if (!(await getConnection())) return;
+	const { stored } = await loadLists();
+	if (listsAreStale(stored)) await refreshListsAndMenu();
+}
+
+async function sendListNote(tabId: number, note: NoteState): Promise<void> {
+	try {
+		await sendMessageToContentScript(tabId, { action: 'showListNote', note });
+	} catch (error) {
+		debugLog('Clipper', 'Could not show the list note', error);
+	}
+}
+
+async function runAddToList(tabId: number, request: AddRequest): Promise<void> {
+	const conn = await getConnection();
+	if (!conn) {
+		await sendListNote(tabId, { kind: 'error', code: 'not-connected' });
+		return;
+	}
+	// "Adding to Books…" only when it takes longer than 400 ms (a link takes a few seconds).
+	let adding: Promise<void> = Promise.resolve();
+	const timer = setTimeout(() => { adding = sendListNote(tabId, { kind: 'adding', label: request.label }); }, 400);
+	let note: NoteState;
+	try {
+		note = outcomeToNote(await addToList(conn, request), request, listUrl(conn.captureUrl, request.list));
+	} catch {
+		note = { kind: 'error', code: 'failed', retry: request };
+	} finally {
+		clearTimeout(timer);
+	}
+	await adding;
+	await sendListNote(tabId, note);
+	if (note.kind !== 'error') void refreshListsAndMenu();
+}
+
+async function handleAddToListClick(info: browser.Menus.OnClickData, tab: browser.Tabs.Tab): Promise<void> {
+	const parsed = parseMenuId(info.menuItemId);
+	if (!parsed) return;
+	if ('state' in parsed) {
+		if (parsed.state === 'connect') {
+			await browser.tabs.create({ url: browser.runtime.getURL('settings.html#connection') });
+		} else if (parsed.state === 'none') {
+			const conn = await getConnection();
+			if (conn) await browser.tabs.create({ url: listUrl(conn.captureUrl) });
+		} else if (parsed.state === 'reload') {
+			listsFailed = false;
+			await refreshListsAndMenu();
+		}
+		return;
+	}
+	if (!tab.id) return;
+	const tabId = tab.id;
+	const { stored } = await loadLists();
+	const list = stored?.lists.find(l => l.slug === parsed.slug) ?? { slug: parsed.slug, label: parsed.slug };
+	await saveLastUsed(list.slug);
+
+	// The content script knows the link's text and the page's own selection.
+	let page: { text?: string; selection?: string } | undefined;
+	try {
+		await ensureContentScriptLoadedInBackground(tabId);
+		const ask = { action: 'getLastLinkText', url: info.linkUrl ?? '', selection: info.selectionText ?? '' };
+		page = (await browser.tabs.sendMessage(tabId, ask, { frameId: info.frameId ?? 0 })
+			.catch(() => browser.tabs.sendMessage(tabId, ask))) as typeof page;
+	} catch {
+		page = undefined; // no link text: the server uses the page's own title
+	}
+
+	const built = buildAddRequest(list, {
+		linkUrl: info.linkUrl,
+		selectionText: page?.selection || info.selectionText,
+		linkText: page?.text,
+	});
+	if ('error' in built) {
+		await sendListNote(tabId, { kind: 'error', code: built.error });
+		return;
+	}
+	await runAddToList(tabId, built.request);
+}
 
 const debouncedUpdateContextMenu = debounce(async (tabId: number) => {
 	if (isContextMenuCreating) {
@@ -956,6 +1103,9 @@ const debouncedUpdateContextMenu = debounce(async (tabId: number) => {
 		for (const item of menuItems) {
 			await browser.contextMenus.create(item);
 		}
+
+		// READ-442: Add to a list ships in every build, so it sits after the store cut above.
+		await createAddToListMenu();
 	} catch (error) {
 		console.error('Error updating context menu:', error);
 	} finally {
@@ -984,6 +1134,8 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 		await ensureContentScriptLoadedInBackground(tab.id);
 	} else if (info.menuItemId === 'copy-markdown-to-clipboard' && tab && tab.id) {
 		await sendMessageToContentScript(tab.id, { action: "copyMarkdownToClipboard" });
+	} else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('add-to-list') && tab) {
+		await handleAddToListClick(info, tab).catch((error) => console.error('Add to a list failed:', error));
 	}
 });
 
@@ -1210,6 +1362,11 @@ browser.action.onClicked.addListener(async (tab) => {
 });
 
 browser.storage.onChanged.addListener((changes, area) => {
+	// READ-442: a new token (the user just connected) means a fresh look at the lists.
+	if (area === 'local' && changes.readingToken) {
+		listsFailed = false;
+		refreshListsAndMenu().catch(() => {});
+	}
 	if (area === 'sync' && changes.general_settings) {
 		updateActionPopup(parseOpenBehavior((changes.general_settings.newValue as Record<string, string>)?.openBehavior));
 	}
